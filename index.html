@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shrinivas Clinic - Dr. K Nishanth Pai</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        
+        /* --- PRINT SETTINGS --- */
+        @page { margin: 0; size: auto; }
+        @media print {
+            body { background: white; margin: 0; padding: 0; }
+            .no-print { display: none !important; }
+            #login-screen { display: none !important; } /* Ensure login never prints */
+            #app-container { display: block !important; } /* Force app visible on print even if hidden on screen */
+            
+            #printArea { 
+                display: block !important; 
+                position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+                z-index: 9999; background: white;
+            }
+            
+            .size-a4 { 
+                width: 210mm; min-height: 297mm; padding: 15mm; 
+                margin: 0 auto; box-sizing: border-box; page-break-after: always;
+            }
+            .size-a5 { 
+                width: 148mm; min-height: 210mm; padding: 10mm; 
+                margin: 0 auto; box-sizing: border-box; display: flex; flex-direction: column; 
+                justify-content: space-between; page-break-after: always;
+            }
+
+            .print-table { width: 100%; border-collapse: collapse; font-size: 10pt; margin-bottom: 15px; }
+            .print-table th, .print-table td { border: 1px solid #333; padding: 6px; text-align: left; vertical-align: top; }
+            .print-table th { background-color: #f0f0f0; font-weight: bold; text-transform: uppercase; }
+            
+            .summary-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; text-align: center; }
+            .summary-table td { border: 2px solid #333; padding: 10px; width: 25%; }
+            .summary-label { font-size: 9pt; text-transform: uppercase; font-weight: bold; color: #555; }
+            .summary-val { font-size: 14pt; font-weight: 900; }
+            .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; font-size: 10pt; }
+        }
+
+        .input-field { width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; background: #f8fafc; outline: none; font-size: 0.85rem; }
+        .input-field:focus { border-color: #3b82f6; background: #fff; }
+        .tab-btn { color: #94a3b8; font-weight: 600; transition: 0.2s; }
+        .tab-btn.active { border-bottom: 3px solid #3b82f6; color: #3b82f6; font-weight: 900; }
+        .diet-tag { display: flex; justify-content: space-between; align-items: center; background: #eff6ff; border: 1px solid #dbeafe; padding: 4px 8px; border-radius: 4px; font-size: 0.7rem; margin-top: 4px; }
+        
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    </style>
+</head>
+<body class="text-slate-900">
+
+    <section id="login-screen" class="fixed inset-0 bg-slate-900 z-[100] flex items-center justify-center">
+        <div class="bg-white p-10 rounded-3xl shadow-2xl w-full max-w-md text-center">
+            <div class="flex justify-center mb-6">
+                <svg fill="#3b82f6" height="60px" width="60px" viewBox="0 0 448 512" xmlns="http://www.w3.org/2000/svg"><path d="M400 32H48C21.5 32 0 53.5 0 80v352c0 26.5 21.5 48 48 48h352c26.5 0 48-21.5 48-48V80c0-26.5-21.5-48-48-48zM160 368c0 8.8-7.2 16-16 16h-32c-8.8 0-16-7.2-16-16v-96H64c-8.8 0-16-7.2-16-16v-32c0-8.8 7.2-16 16-16h32v-96c0-8.8 7.2-16 16-16h32c8.8 0 16 7.2 16 16v96h32c8.8 0 16 7.2 16 16v32c0 8.8-7.2 16-16 16h-32v96zm240-80c0 8.8-7.2 16-16 16h-96c-8.8 0-16-7.2-16-16v-32c0-8.8 7.2-16 16-16h96c8.8 0 16 7.2 16 16v32zm0-96c0 8.8-7.2 16-16 16h-96c-8.8 0-16-7.2-16-16v-32c0-8.8 7.2-16 16-16h96c8.8 0 16 7.2 16 16v32z"/></svg>
+            </div>
+            <h2 class="text-2xl font-black text-slate-800 mb-2">SHRINIVAS CLINIC</h2>
+            <p class="text-sm text-slate-500 mb-8 font-bold">Clinical Management System</p>
+            
+            <form onsubmit="event.preventDefault(); attemptLogin();" class="space-y-4 text-left">
+                <div>
+                    <label class="text-xs font-bold text-slate-400 uppercase ml-1">User ID</label>
+                    <input type="text" id="loginUser" class="input-field py-3 bg-slate-50" placeholder="Enter ID">
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-slate-400 uppercase ml-1">Password</label>
+                    <input type="password" id="loginPass" class="input-field py-3 bg-slate-50" placeholder="Enter Password">
+                </div>
+                <button type="submit" class="w-full bg-blue-600 text-white font-black py-4 rounded-xl shadow-lg hover:bg-blue-700 transition mt-4">SECURE LOGIN</button>
+            </form>
+            <p class="text-xs text-slate-300 mt-6">Authorized Personnel Only</p>
+        </div>
+    </section>
+
+    <div id="app-container" class="hidden">
+        
+        <div class="fixed left-0 top-0 h-full w-64 bg-slate-900 text-white p-5 hidden md:block no-print shadow-2xl z-50">
+            <div class="mb-10 text-center border-b border-slate-700 pb-6">
+                <div class="flex justify-center mb-4">
+                    <svg fill="#ffffff" height="60px" width="60px" viewBox="0 0 448 512" xmlns="http://www.w3.org/2000/svg"><path d="M400 32H48C21.5 32 0 53.5 0 80v352c0 26.5 21.5 48 48 48h352c26.5 0 48-21.5 48-48V80c0-26.5-21.5-48-48-48zM160 368c0 8.8-7.2 16-16 16h-32c-8.8 0-16-7.2-16-16v-96H64c-8.8 0-16-7.2-16-16v-32c0-8.8 7.2-16 16-16h32v-96c0-8.8 7.2-16 16-16h32c8.8 0 16 7.2 16 16v96h32c8.8 0 16 7.2 16 16v32c0 8.8-7.2 16-16 16h-32v96zm240-80c0 8.8-7.2 16-16 16h-96c-8.8 0-16-7.2-16-16v-32c0-8.8 7.2-16 16-16h96c8.8 0 16 7.2 16 16v32zm0-96c0 8.8-7.2 16-16 16h-96c-8.8 0-16-7.2-16-16v-32c0-8.8 7.2-16 16-16h96c8.8 0 16 7.2 16 16v32z"/></svg>
+                </div>
+                <h1 class="font-black text-xl tracking-tight text-blue-400">SHRINIVAS CLINIC</h1>
+                <p class="text-[10px] text-slate-400 uppercase tracking-widest mt-1 font-bold">Dr. K Nishanth Pai</p>
+            </div>
+            <nav class="space-y-2">
+                <button onclick="showSection('dashboard')" class="w-full flex items-center p-3 hover:bg-slate-800 rounded transition"><i class="fas fa-home mr-3 text-blue-400 w-5"></i>Dashboard</button>
+                <button onclick="showSection('patient-list')" class="w-full flex items-center p-3 hover:bg-slate-800 rounded transition"><i class="fas fa-search mr-3 text-blue-400 w-5"></i>Directory</button>
+                <button onclick="showSection('register-patient')" class="w-full flex items-center p-3 hover:bg-slate-800 rounded transition"><i class="fas fa-plus-circle mr-3 text-blue-400 w-5"></i>Registration</button>
+                <button onclick="showSection('analytics')" class="w-full flex items-center p-3 hover:bg-slate-800 rounded transition"><i class="fas fa-chart-pie mr-3 text-blue-400 w-5"></i>Statistics</button>
+            </nav>
+            
+            <div class="absolute bottom-5 left-0 w-full px-5">
+                <button onclick="performLogout()" class="w-full flex items-center justify-center p-3 bg-red-900/30 text-red-400 hover:bg-red-900/50 rounded-xl transition text-sm font-bold"><i class="fas fa-sign-out-alt mr-2"></i> Logout</button>
+            </div>
+        </div>
+
+        <main class="md:ml-64 p-4 lg:p-8 min-h-screen no-print bg-slate-50 transition-all">
+            
+            <section id="dashboard" class="content-sec">
+                <div class="flex justify-between items-center mb-8">
+                    <h2 class="text-2xl font-black text-slate-800 uppercase">Dashboard</h2>
+                    <div id="date-now" class="bg-white px-4 py-2 rounded shadow-sm text-xs font-bold text-slate-500 border"></div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <div class="bg-white p-8 rounded-2xl border shadow-sm text-center">
+                        <p class="text-xs font-bold text-slate-400 uppercase tracking-widest">Registered Patients</p>
+                        <h3 id="stat-total" class="text-6xl font-black text-blue-600 mt-2">0</h3>
+                    </div>
+                    <div class="bg-gradient-to-br from-blue-700 to-indigo-800 p-8 rounded-2xl shadow-lg text-white">
+                        <h3 class="text-2xl font-black">Dr. K Nishanth Pai</h3>
+                        <p class="text-sm opacity-90 font-medium">MD (Kayachikitsa)</p>
+                        <p class="text-xs opacity-75 mt-4 leading-relaxed">Pais Complex, Kodikal Road,<br>Urwa, Mangalore - 575006</p>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-2xl border shadow-sm">
+                    <h3 class="font-bold text-slate-700 mb-4 border-b pb-2">DATA MANAGEMENT</h3>
+                    <div class="flex gap-4 items-center">
+                        <button onclick="backupData()" class="bg-emerald-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-emerald-700 flex items-center gap-2"><i class="fas fa-download"></i> Backup Data</button>
+                        <div class="h-10 w-px bg-slate-200"></div>
+                        <input type="file" id="restoreFile" class="hidden" onchange="restoreData(this)">
+                        <button onclick="document.getElementById('restoreFile').click()" class="bg-slate-800 text-white px-6 py-3 rounded-lg font-bold hover:bg-black flex items-center gap-2"><i class="fas fa-upload"></i> Restore Data</button>
+                    </div>
+                </div>
+            </section>
+
+            <section id="register-patient" class="content-sec hidden">
+                <div class="max-w-lg mx-auto bg-white p-8 rounded-2xl border shadow-lg mt-8">
+                    <h2 class="text-xl font-black mb-6 text-center uppercase">New Registration</h2>
+                    <form id="regForm" class="space-y-4">
+                        <div><label class="text-xs font-bold text-slate-500 uppercase">Full Name</label><input type="text" id="regName" class="input-field" required></div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div><label class="text-xs font-bold text-slate-500 uppercase">Age</label><input type="number" id="regAge" class="input-field" required></div>
+                            <div><label class="text-xs font-bold text-slate-500 uppercase">Gender</label><select id="regGender" class="input-field"><option>Male</option><option>Female</option><option>Other</option></select></div>
+                        </div>
+                        <div><label class="text-xs font-bold text-slate-500 uppercase">Mobile</label><input type="tel" id="regPhone" class="input-field" required></div>
+                        <div><label class="text-xs font-bold text-slate-500 uppercase">Address</label><textarea id="regAddr" rows="2" class="input-field"></textarea></div>
+                        <button type="button" onclick="performRegistration()" class="w-full py-3 bg-blue-600 text-white font-bold rounded-lg shadow hover:bg-blue-700 transition">Register</button>
+                    </form>
+                </div>
+            </section>
+
+            <section id="patient-list" class="content-sec hidden">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-black uppercase">Directory</h2>
+                    <input type="text" id="searchInput" onkeyup="searchPatients()" placeholder="Search Name, ID, or Phone..." class="input-field w-64">
+                </div>
+                <div class="bg-white rounded-xl border overflow-hidden shadow-sm">
+                    <table class="w-full text-left">
+                        <thead class="bg-slate-50 text-[10px] font-black uppercase text-slate-400">
+                            <tr><th class="p-4">ID</th><th class="p-4">Name</th><th class="p-4">Mobile</th><th class="p-4">Status</th><th class="p-4 text-right">View</th></tr>
+                        </thead>
+                        <tbody id="patientTable" class="divide-y text-sm"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section id="analytics" class="content-sec hidden">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-black uppercase">Statistics & Reports</h2>
+                    <div class="flex gap-2">
+                        <button onclick="printStatsView()" class="bg-slate-800 text-white px-4 py-2 rounded text-xs font-bold"><i class="fas fa-chart-bar mr-2"></i>Summary Stats</button>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-2xl border shadow-sm mb-6 flex gap-4 items-end">
+                    <div class="flex-1"><label>From</label><input type="date" id="anaFrom" class="input-field"></div>
+                    <div class="flex-1"><label>To</label><input type="date" id="anaTo" class="input-field"></div>
+                    <button onclick="calculateClinicStats()" class="bg-blue-600 text-white font-bold py-2 px-6 rounded-lg">Calc Stats</button>
+                    <button onclick="generateClinicalReport()" class="bg-indigo-600 text-white font-bold py-2 px-6 rounded-lg">Print Clinical Register</button>
+                </div>
+                <div id="statsResultArea" class="hidden space-y-6">
+                    <div class="grid grid-cols-4 gap-4 text-center">
+                        <div class="bg-white p-4 rounded border"><p class="text-xs text-slate-400 font-bold uppercase">New Cases</p><h3 id="resNew" class="text-2xl font-black text-blue-600">0</h3></div>
+                        <div class="bg-white p-4 rounded border"><p class="text-xs text-slate-400 font-bold uppercase">Follow-ups</p><h3 id="resRep" class="text-2xl font-black text-indigo-600">0</h3></div>
+                        <div class="bg-white p-4 rounded border"><p class="text-xs text-slate-400 font-bold uppercase">Male</p><h3 id="resM" class="text-2xl font-black">0</h3></div>
+                        <div class="bg-white p-4 rounded border"><p class="text-xs text-slate-400 font-bold uppercase">Female</p><h3 id="resF" class="text-2xl font-black">0</h3></div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div class="bg-white p-4 rounded border h-64 overflow-y-auto"><h4 class="text-xs font-bold border-b pb-2 mb-2 sticky top-0 bg-white">Diagnosis</h4><div id="diagTable" class="text-xs"></div></div>
+                        <div class="bg-white p-4 rounded border h-64 overflow-y-auto"><h4 class="text-xs font-bold border-b pb-2 mb-2 sticky top-0 bg-white">Age Range</h4><div id="ageTable" class="text-xs"></div></div>
+                        <div class="bg-white p-4 rounded border h-64 overflow-y-auto"><h4 class="text-xs font-bold border-b pb-2 mb-2 sticky top-0 bg-white">Weight Range</h4><div id="wtTable" class="text-xs"></div></div>
+                        <div class="bg-white p-4 rounded border h-64 overflow-y-auto"><h4 class="text-xs font-bold border-b pb-2 mb-2 sticky top-0 bg-white">Pulse Range</h4><div id="pulseTable" class="text-xs"></div></div>
+                        <div class="bg-white p-4 rounded border h-64 overflow-y-auto"><h4 class="text-xs font-bold border-b pb-2 mb-2 sticky top-0 bg-white">BP Range (Sys)</h4><div id="bpTable" class="text-xs"></div></div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="patient-profile" class="content-sec hidden fixed inset-0 bg-slate-50 md:static md:bg-transparent z-50 overflow-y-auto">
+                <div class="flex items-center justify-between mb-6 bg-white p-4 rounded-xl border shadow-sm md:bg-transparent md:border-none md:shadow-none md:p-0">
+                    <div>
+                        <span class="text-[10px] font-black bg-blue-100 text-blue-600 px-2 py-1 rounded mb-1 inline-block" id="prof-id"></span>
+                        <h2 class="text-2xl font-black text-slate-800 uppercase" id="prof-name"></h2>
+                        <p class="text-xs font-bold text-slate-500" id="prof-meta"></p>
+                        <p class="text-xs text-slate-400 mt-1"><i class="fas fa-map-marker-alt mr-1"></i><span id="prof-addr"></span></p>
+                    </div>
+                    <button onclick="showSection('patient-list')" class="text-slate-300 hover:text-red-500 text-2xl"><i class="fas fa-times-circle"></i></button>
+                </div>
+
+                <div class="flex border-b mb-6 space-x-6">
+                    <button onclick="openTab('visits')" class="tab-btn pb-2 active" id="tab-visits">Consultations</button>
+                    <button onclick="openTab('diet')" class="tab-btn pb-2" id="tab-diet">Diet Planner</button>
+                    <button onclick="openTab('certs')" class="tab-btn pb-2" id="tab-certs">Certificates</button>
+                </div>
+
+                <div id="content-visits" class="profile-tab-content grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div class="bg-white p-6 rounded-2xl border shadow-sm h-fit">
+                        <h3 class="text-xs font-bold text-blue-600 uppercase mb-4">Patient Consultation</h3>
+                        <form id="visitForm" class="space-y-3">
+                            <div class="grid grid-cols-3 gap-2">
+                                <div><label>BP (mmHg)</label><input type="text" id="v-bp" placeholder="120/80" class="input-field"></div>
+                                <div><label>Pulse (bpm)</label><input type="text" id="v-pulse" placeholder="72" class="input-field"></div>
+                                <div><label>Weight (kg)</label><input type="text" id="v-wt" placeholder="65" class="input-field"></div>
+                            </div>
+                            <div><label>Chief Complaints</label><textarea id="v-complaints" rows="2" placeholder="Complaints" class="input-field"></textarea></div>
+                            <div><label>Physical Examination (O/E)</label><textarea id="v-exam" rows="3" placeholder="Clinical findings..." class="input-field"></textarea></div>
+                            <div><label>Diagnosis</label><input type="text" id="v-diag" placeholder="Diagnosis" class="input-field"></div>
+                            <div><label>Prescription (Rx)</label><textarea id="v-rx" rows="4" placeholder="Rx" class="input-field font-mono bg-blue-50"></textarea></div>
+                            <button type="button" id="btn-save-visit" onclick="saveActiveVisit()" class="w-full py-3 bg-blue-600 text-white font-bold rounded-lg shadow">Save Record</button>
+                        </form>
+                    </div>
+                    <div id="visitHistory" class="space-y-3 max-h-[600px] overflow-y-auto pr-2"></div>
+                </div>
+
+                <div id="content-diet" class="profile-tab-content hidden">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-bold text-slate-700">Multi-Item Diet Planner</h3>
+                        <button onclick="copyMondayToAll()" class="text-xs bg-indigo-100 text-indigo-700 px-3 py-1 rounded font-bold hover:bg-indigo-200">Copy Monday to All</button>
+                    </div>
+                    <div id="diet-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6"></div>
+                    <div class="text-center"><button onclick="printDiet()" class="bg-emerald-600 text-white px-8 py-2 rounded-lg font-bold shadow hover:bg-emerald-700">Print Diet Chart</button></div>
+                </div>
+
+                <div id="content-certs" class="profile-tab-content hidden">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        <div class="bg-white p-6 rounded-2xl border shadow-sm h-fit">
+                            <h3 class="text-xs font-bold text-slate-500 uppercase mb-4">Generator</h3>
+                            <div class="space-y-3">
+                                <input type="date" id="c-issue-date" class="input-field">
+                                <select id="c-type" onchange="toggleCertUI()" class="input-field"><option value="Medical Certificate">Medical Certificate</option><option value="To Whomsoever it May Concern">To Whomsoever it May Concern</option></select>
+                                <div id="leave-box" class="grid grid-cols-3 gap-2 bg-slate-50 p-3 rounded border">
+                                    <input type="number" id="c-days" placeholder="Days" class="input-field">
+                                    <input type="date" id="c-from" class="input-field">
+                                    <input type="date" id="c-to" class="input-field">
+                                </div>
+                                <textarea id="c-body" rows="3" placeholder="Reason..." class="input-field"></textarea>
+                                <div class="flex gap-2">
+                                    <button onclick="issueOfficialCert('size-a4')" class="flex-1 bg-slate-800 text-white py-2 rounded font-bold">A4</button>
+                                    <button onclick="issueOfficialCert('size-a5')" class="flex-1 bg-slate-700 text-white py-2 rounded font-bold">A5</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div><h3 class="text-xs font-bold text-slate-400 uppercase mb-2">History</h3><div id="certHistory" class="space-y-2"></div></div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <div id="printArea" style="display:none;"></div>
+
+    <script>
+        // --- DATA ---
+        const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+        const meals = ["Breakfast", "Mid-Snack", "Lunch", "Evening-Snack", "Dinner"];
+        const foodDB = [
+            {n: "Idli (1)", c: 40}, {n: "Dosa (1)", c: 120}, {n: "Upma (1 cup)", c: 200}, {n: "Poha (1 cup)", c: 250},
+            {n: "Chapati (1)", c: 80}, {n: "Rice (1 cup)", c: 150}, {n: "Dal (1 cup)", c: 120}, {n: "Curd (1 cup)", c: 100},
+            {n: "Sabzi (1 cup)", c: 100}, {n: "Chicken Curry", c: 250}, {n: "Fish Curry", c: 200}, {n: "Egg (1)", c: 75},
+            {n: "Tea", c: 40}, {n: "Coffee", c: 50}, {n: "Milk (1 glass)", c: 120}, {n: "Apple", c: 90}, 
+            {n: "Banana", c: 100}, {n: "Biscuits (2)", c: 70}, {n: "Oats", c: 140}, {n: "Salad", c: 50}
+        ];
+
+        let patients = JSON.parse(localStorage.getItem('shrinivasa_v26_db')) || [];
+        let curPid = null;
+        let editIdx = -1;
+
+        // --- AUTHENTICATION ---
+        function attemptLogin() {
+            const u = document.getElementById('loginUser').value;
+            const p = document.getElementById('loginPass').value;
+            // HARDCODED CREDENTIALS - Change these if needed
+            if(u === 'admin' && p === 'admin123') {
+                document.getElementById('login-screen').classList.add('hidden');
+                document.getElementById('app-container').classList.remove('hidden');
+                updateDash();
+            } else {
+                alert("Invalid Credentials");
+            }
+        }
+
+        function performLogout() {
+            document.getElementById('app-container').classList.add('hidden');
+            document.getElementById('login-screen').classList.remove('hidden');
+            document.getElementById('loginUser').value = "";
+            document.getElementById('loginPass').value = "";
+        }
+
+        // --- CORE ---
+        function save() { localStorage.setItem('shrinivasa_v26_db', JSON.stringify(patients)); updateDash(); }
+        function updateDash() { document.getElementById('stat-total').innerText = patients.length; document.getElementById('date-now').innerText = new Date().toDateString(); }
+        function showSection(id) {
+            document.querySelectorAll('.content-sec').forEach(x => x.classList.add('hidden'));
+            document.getElementById(id).classList.remove('hidden');
+            if(id === 'register-patient') document.getElementById('regForm').reset();
+            if(id === 'patient-list') renderTable(patients);
+            updateDash();
+        }
+
+        // --- BACKUP & RESTORE ---
+        function backupData() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(patients));
+            const dlAnchorElem = document.createElement('a');
+            dlAnchorElem.setAttribute("href", dataStr);
+            dlAnchorElem.setAttribute("download", "clinic_backup.json");
+            dlAnchorElem.click();
+        }
+        function restoreData(input) {
+            const file = input.files[0];
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try { patients = JSON.parse(e.target.result); save(); alert("Restored!"); location.reload(); } catch(err) { alert("Error"); }
+            };
+            reader.readAsText(file);
+        }
+
+        // --- REGISTRATION ---
+        function performRegistration() {
+            const name = document.getElementById('regName').value;
+            const mobile = document.getElementById('regPhone').value;
+            if(!name || !mobile) return alert("Required fields missing");
+            const id = 1000 + patients.length + 1;
+            const p = { 
+                id, name, 
+                age: document.getElementById('regAge').value, 
+                gender: document.getElementById('regGender').value, 
+                mobile, 
+                address: document.getElementById('regAddr').value, 
+                regDate: new Date().toISOString(), 
+                visits: [], certs: [], diet: {} 
+            };
+            days.forEach(d => { p.diet[d] = {}; meals.forEach(m => p.diet[d][m] = []); });
+            patients.unshift(p);
+            save(); openProfile(id);
+        }
+
+        // --- DIRECTORY ---
+        function renderTable(data) {
+            document.getElementById('patientTable').innerHTML = data.map(p => `
+                <tr class="hover:bg-slate-50 cursor-pointer" onclick="openProfile(${p.id})">
+                    <td class="p-4 font-mono text-blue-600 font-bold">#${p.id}</td>
+                    <td class="p-4 font-bold uppercase">${p.name} <span class="text-xs text-slate-400 font-normal">(${p.age}/${p.gender})</span></td>
+                    <td class="p-4">${p.mobile}</td>
+                    <td class="p-4 text-xs font-bold ${p.visits.length > 1 ? 'text-indigo-600' : 'text-blue-600'}">${p.visits.length > 1 ? 'Follow-up' : 'New'}</td>
+                    <td class="p-4 text-right"><i class="fas fa-chevron-right text-slate-300"></i></td>
+                </tr>`).join('');
+        }
+        function searchPatients() {
+            const q = document.getElementById('searchInput').value.toLowerCase();
+            renderTable(patients.filter(p => p.name.toLowerCase().includes(q) || p.mobile.includes(q) || p.id.toString().includes(q)));
+        }
+
+        // --- PROFILE ---
+        function openProfile(id) {
+            curPid = id; editIdx = -1;
+            const p = patients.find(x => x.id === id);
+            document.getElementById('prof-id').innerText = `#${p.id}`;
+            document.getElementById('prof-name').innerText = p.name;
+            document.getElementById('prof-meta').innerText = `${p.age} Yrs | ${p.gender} | ${p.mobile}`;
+            document.getElementById('prof-addr').innerText = p.address || "No Address"; 
+            renderVisits(); openTab('visits'); showSection('patient-profile');
+            document.getElementById('visitForm').reset();
+            document.getElementById('btn-save-visit').innerText = "Save Record";
+        }
+        function openTab(t) {
+            document.querySelectorAll('.profile-tab-content').forEach(x => x.classList.add('hidden'));
+            document.querySelectorAll('.tab-btn').forEach(x => x.classList.remove('active'));
+            document.getElementById(`content-${t}`).classList.remove('hidden');
+            document.getElementById(`tab-${t}`).classList.add('active');
+            if(t === 'diet') renderDietGrid();
+            if(t === 'certs') renderCertHistory();
+        }
+
+        // --- VISITS ---
+        function editVisit(idx) {
+            const v = patients.find(x => x.id === curPid).visits[idx];
+            document.getElementById('v-bp').value = v.bp;
+            document.getElementById('v-pulse').value = v.pulse;
+            document.getElementById('v-wt').value = v.wt;
+            document.getElementById('v-complaints').value = v.complaints;
+            document.getElementById('v-exam').value = v.exam;
+            document.getElementById('v-diag').value = v.diag;
+            document.getElementById('v-rx').value = v.rx;
+            editIdx = idx;
+            document.getElementById('btn-save-visit').innerText = "Update Record";
+            document.getElementById('content-visits').scrollIntoView({behavior:'smooth'});
+        }
+        function saveActiveVisit() {
+            const p = patients.find(x => x.id === curPid);
+            const v = { date: editIdx > -1 ? p.visits[editIdx].date : new Date().toISOString(), bp: document.getElementById('v-bp').value, pulse: document.getElementById('v-pulse').value, wt: document.getElementById('v-wt').value, complaints: document.getElementById('v-complaints').value, exam: document.getElementById('v-exam').value, diag: document.getElementById('v-diag').value, rx: document.getElementById('v-rx').value };
+            if(editIdx > -1) { p.visits[editIdx] = v; editIdx = -1; document.getElementById('btn-save-visit').innerText = "Save Record"; }
+            else p.visits.unshift(v);
+            save(); renderVisits(); document.getElementById('visitForm').reset();
+        }
+        function renderVisits() {
+            const p = patients.find(x => x.id === curPid);
+            document.getElementById('visitHistory').innerHTML = p.visits.map((v, i) => `
+                <div class="bg-white border rounded-xl p-4 shadow-sm text-sm">
+                    <div class="flex justify-between border-b pb-2 mb-2 text-xs font-bold text-slate-400"><span>${new Date(v.date).toLocaleDateString()}</span><span>BP: ${v.bp}</span></div>
+                    <div class="mb-2"><span class="font-bold text-blue-600">Dx:</span> ${v.diag}</div>
+                    <div class="bg-slate-50 p-2 rounded font-mono whitespace-pre-wrap text-xs mb-2">${v.rx}</div>
+                    <div class="flex gap-2">
+                        <button onclick="editVisit(${i})" class="text-xs bg-slate-200 px-2 py-1 rounded font-bold">Edit</button>
+                        <button onclick="printRx(${i})" class="text-xs bg-slate-800 text-white px-2 py-1 rounded font-bold">Print</button>
+                    </div>
+                </div>`).join('');
+        }
+
+        // --- DIET ---
+        function renderDietGrid() {
+            const p = patients.find(x => x.id === curPid);
+            if(!p.diet) { p.diet = {}; days.forEach(d => { p.diet[d] = {}; meals.forEach(m => p.diet[d][m] = []) }); }
+            const grid = document.getElementById('diet-grid');
+            grid.innerHTML = days.map(day => {
+                let dayCals = 0;
+                meals.forEach(m => { (p.diet[day][m] || []).forEach(i => dayCals += (i.c * i.q)); });
+                return `
+                <div class="bg-white border rounded-xl p-3 shadow-sm">
+                    <div class="flex justify-between items-center border-b pb-2 mb-2">
+                        <h4 class="font-bold text-blue-600 uppercase text-xs">${day}</h4>
+                        <span class="text-[10px] bg-green-100 text-green-700 px-2 rounded-full font-bold">${dayCals} kcal</span>
+                    </div>
+                    <div class="space-y-3">
+                        ${meals.map(meal => `
+                            <div>
+                                <label class="text-[9px] font-bold text-slate-400 uppercase block mb-1">${meal}</label>
+                                <div class="flex gap-1 mb-1">
+                                    <select id="food-${day}-${meal}" class="input-field py-1 px-1 text-xs flex-1"><option value="">+ Add Food</option>${foodDB.map(f => `<option value="${f.n}|${f.c}">${f.n}</option>`).join('')}</select>
+                                    <input type="number" id="qty-${day}-${meal}" value="1" min="1" class="input-field py-1 px-1 text-xs w-10 text-center">
+                                    <button onclick="addFood('${day}','${meal}')" class="bg-blue-600 text-white px-2 rounded text-xs font-bold">+</button>
+                                </div>
+                                <div>
+                                    ${(p.diet[day][meal] || []).map((item, idx) => `
+                                        <div class="diet-tag"><span>${item.n} <span class="text-slate-500 text-[9px]">x${item.q}</span></span><div class="flex items-center gap-1"><span class="text-[9px] text-slate-400">${item.c * item.q}</span><button onclick="remFood('${day}','${meal}',${idx})" class="text-red-500 font-bold ml-1">&times;</button></div></div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>`;
+            }).join('');
+        }
+        function addFood(day, meal) {
+            const sel = document.getElementById(`food-${day}-${meal}`).value;
+            const qty = parseInt(document.getElementById(`qty-${day}-${meal}`).value) || 1;
+            if(!sel) return;
+            const [name, cal] = sel.split('|');
+            const p = patients.find(x => x.id === curPid);
+            p.diet[day][meal].push({ n: name, c: parseInt(cal), q: qty });
+            save(); renderDietGrid();
+        }
+        function remFood(day, meal, idx) { const p = patients.find(x => x.id === curPid); p.diet[day][meal].splice(idx, 1); save(); renderDietGrid(); }
+        function copyMondayToAll() { const p = patients.find(x => x.id === curPid); const src = JSON.stringify(p.diet["Monday"]); days.forEach(d => { if(d !== "Monday") p.diet[d] = JSON.parse(src); }); save(); renderDietGrid(); }
+
+        // --- STATS LOGIC ---
+        function calculateClinicStats() {
+            const fd = new Date(document.getElementById('anaFrom').value);
+            const td = new Date(document.getElementById('anaTo').value);
+            td.setHours(23,59,59);
+            
+            const st = { n:0, r:0, m:0, f:0, age:{}, wt:{}, bp:{}, pulse:{}, diag:{} };
+            
+            patients.forEach(p => {
+                const allVisits = p.visits.sort((a,b) => new Date(a.date) - new Date(b.date));
+                let active = false;
+
+                allVisits.forEach((v, index) => {
+                    const vDate = new Date(v.date);
+                    if(vDate >= fd && vDate <= td) {
+                        active = true;
+                        if(index === 0) st.n++; else st.r++;
+                        if(v.diag) { const d = v.diag.trim().toUpperCase(); if(d) st.diag[d] = (st.diag[d] || 0) + 1; }
+                    }
+                });
+
+                if(active) {
+                    if(p.gender === 'Male') st.m++; else st.f++;
+                    const ageGrp = Math.floor(p.age/10)*10 + "-" + (Math.floor(p.age/10)*10+9);
+                    st.age[ageGrp] = (st.age[ageGrp]||0)+1;
+                    const lastV = allVisits[allVisits.length-1];
+                    if(lastV.wt) { const w = parseInt(lastV.wt); if(w) { const g = Math.floor(w/10)*10 + "-" + (Math.floor(w/10)*10+9); st.wt[g] = (st.wt[g]||0)+1; } }
+                    if(lastV.pulse) { const pu = parseInt(lastV.pulse); if(pu) { const g = Math.floor(pu/10)*10 + "-" + (Math.floor(pu/10)*10+9); st.pulse[g] = (st.pulse[g]||0)+1; } }
+                    if(lastV.bp) { const sys = parseInt(lastV.bp.split('/')[0]); if(sys) { const g = Math.floor(sys/10)*10 + "s"; st.bp[g] = (st.bp[g]||0)+1; } }
+                }
+            });
+
+            document.getElementById('resNew').innerText = st.n;
+            document.getElementById('resRep').innerText = st.r;
+            document.getElementById('resM').innerText = st.m;
+            document.getElementById('resF').innerText = st.f;
+            
+            const renderTable = (data, id) => {
+                let h = "<table class='w-full text-left'><tr><th>Item</th><th>Count</th></tr>";
+                let keys = Object.keys(data);
+                if(id === 'diagTable') keys.sort((a,b) => data[b] - data[a]); 
+                else keys.sort(); 
+                keys.forEach(k => h += `<tr><td>${k}</td><td>${data[k]}</td></tr>`);
+                document.getElementById(id).innerHTML = h + "</table>";
+            };
+            renderTable(st.age, 'ageTable'); renderTable(st.wt, 'wtTable'); renderTable(st.pulse, 'pulseTable'); renderTable(st.bp, 'bpTable'); renderTable(st.diag, 'diagTable');
+            window.anaData = st;
+            document.getElementById('statsResultArea').classList.remove('hidden');
+        }
+
+        // --- NEW: CLINICAL REPORT ---
+        function generateClinicalReport() {
+            const fd = new Date(document.getElementById('anaFrom').value);
+            const td = new Date(document.getElementById('anaTo').value);
+            td.setHours(23,59,59);
+
+            if(isNaN(fd.getTime()) || isNaN(td.getTime())) { alert("Select Dates"); return; }
+
+            let rows = "";
+            let count = 0;
+
+            patients.forEach(p => {
+                p.visits.forEach(v => {
+                    const d = new Date(v.date);
+                    if(d >= fd && d <= td) {
+                        count++;
+                        rows += `
+                        <tr>
+                            <td>${d.toLocaleDateString()}</td>
+                            <td>${p.id}</td>
+                            <td><strong>${p.name}</strong></td>
+                            <td>${v.diag || '-'}</td>
+                            <td style="font-family:monospace; font-size:8pt; white-space:pre-wrap;">${v.rx || '-'}</td>
+                        </tr>`;
+                    }
+                });
+            });
+
+            let html = `
+            <div class="size-a4">
+                ${getHeader()}
+                <h2 style="text-align:center; text-decoration:underline; margin-bottom:15px; font-size:14pt;">CLINICAL REGISTER</h2>
+                <p style="text-align:center; margin-bottom:20px; font-size:10pt;">Period: ${fd.toLocaleDateString()} to ${td.toLocaleDateString()} | Total Visits: ${count}</p>
+                <table class="print-table">
+                    <thead>
+                        <tr>
+                            <th width="10%">Date</th>
+                            <th width="8%">ID</th>
+                            <th width="20%">Name</th>
+                            <th width="20%">Diagnosis</th>
+                            <th width="42%">Prescription</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>`;
+            doPrint(html, 'size-a4');
+        }
+
+        // --- PRINT ENGINE (TEXT ONLY) ---
+        function getHeader() {
+            return `
+            <div style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 10px;">
+                <div>
+                    <h1 style="font-size: 22px; font-weight: 900; text-transform: uppercase; margin: 0; line-height: 1;">Shrinivas Clinic</h1>
+                    <p style="font-size: 14px; font-weight: 700; margin: 5px 0 0 0; color: #2563eb;">Dr. K Nishanth Pai <span style="font-size: 10px; color: #000; font-weight: 500;">MD (Kayachikitsa)</span></p>
+                </div>
+                <div style="text-align: right; font-size: 10px; font-weight: 600; text-transform: uppercase; line-height: 1.4;">
+                    <p style="margin:0;">Pais Complex, Kodikal Road</p>
+                    <p style="margin:0;">Urwa, Mangalore - 575006</p>
+                    <p style="margin:2px 0 0 0; color: #2563eb;">+91-9964279421</p>
+                </div>
+            </div>`;
+        }
+
+        function doPrint(content, cssClass) {
+            const area = document.getElementById('printArea');
+            area.innerHTML = content;
+            area.className = cssClass;
+            setTimeout(() => window.print(), 300);
+        }
+
+        function printDiet() {
+            const p = patients.find(x => x.id === curPid);
+            const getDayTotal = (d) => { let sum = 0; meals.forEach(m => { (p.diet[d][m]||[]).forEach(i => sum += (i.c * i.q)); }); return sum; };
+            let rows = days.map(d => {
+                let cells = meals.map(m => {
+                    const items = p.diet[d][m] || [];
+                    if(items.length === 0) return `<td style="border:1px solid #ccc; padding:4px;">-</td>`;
+                    return `<td style="border:1px solid #ccc; padding:4px;">${items.map(i => `• ${i.n} (${i.q})`).join('<br>')}</td>`;
+                }).join('');
+                return `<tr><td style="border:1px solid #ccc; padding:4px; font-weight:bold;">${d}</td>${cells}<td style="border:1px solid #ccc; padding:4px; font-weight:bold; text-align:center;">${getDayTotal(d)}</td></tr>`;
+            }).join('');
+            let html = `<div class="size-a4">${getHeader()}<h2 style="text-align:center; text-decoration:underline; margin-bottom:15px; font-size:14pt;">DIET CHART</h2><p style="font-weight:bold; margin-bottom:10px; font-size:10pt;">Patient: ${p.name} (ID: ${p.id}) <span style="float:right">Date: ${new Date().toLocaleDateString()}</span></p><table style="width:100%; border-collapse:collapse; font-size:9pt;"><thead><tr style="background:#eee;"><th style="border:1px solid #ccc; padding:4px;">Day</th>${meals.map(m=>`<th style="border:1px solid #ccc; padding:4px;">${m}</th>`).join('')}<th style="border:1px solid #ccc; padding:4px;">Total Kcal</th></tr></thead><tbody>${rows}</tbody></table><div style="margin-top:20px; font-size:10pt; border:1px dashed #999; padding:10px;"><strong>Instructions:</strong><ul style="margin:5px 0 0 15px; padding:0;"><li>Drink 3L water daily.</li><li>Avoid oil/sugar.</li></ul></div></div>`;
+            doPrint(html, 'size-a4');
+        }
+
+        function printRx(idx) {
+            const p = patients.find(x => x.id === curPid);
+            const v = p.visits[idx];
+            let html = `
+            <div class="size-a5">
+                ${getHeader()}
+                <div style="flex-grow: 1;">
+                    <div style="display:flex; justify-content:space-between; border-bottom:1px solid #000; padding-bottom:5px; margin-bottom:15px; font-weight:bold; font-size:11px;">
+                        <div>
+                            <span>Name: ${p.name}</span><br>
+                            <span style="font-size:10px;">ID: ${p.id}</span>
+                        </div>
+                        <span>Date: ${new Date(v.date).toLocaleDateString()}</span>
+                    </div>
+                    ${v.complaints ? `<div style="font-size:11px; margin-bottom:5px;"><strong>C/O:</strong> ${v.complaints}</div>` : ''}
+                    ${v.exam ? `<div style="font-size:11px; margin-bottom:5px;"><strong>O/E:</strong> ${v.exam}</div>` : ''}
+                    <div style="font-size:11px; margin-bottom:15px;">
+                        <strong>BP:</strong> ${v.bp} &nbsp; <strong>Pulse:</strong> ${v.pulse} &nbsp; <strong>Wt:</strong> ${v.wt}<br>
+                        <strong>Dx:</strong> ${v.diag}
+                    </div>
+                    <div style="font-weight:bold; font-size:12px; margin-bottom:5px;">Rx</div>
+                    <div style="font-family:monospace; font-size:11px; line-height:1.4; white-space:pre-wrap;">${v.rx}</div>
+                </div>
+                <div style="text-align:right; font-weight:bold; font-size:11px; margin-top: auto;">Dr. K Nishanth Pai</div>
+            </div>`;
+            doPrint(html, 'size-a5');
+        }
+
+        function issueOfficialCert(sz) {
+            const p = patients.find(x => x.id === curPid);
+            const type = document.getElementById('c-type').value;
+            const days = document.getElementById('c-days').value;
+            const body = document.getElementById('c-body').value;
+            p.certs.unshift({ date: new Date().toISOString(), type }); save();
+            document.getElementById('certHistory').innerHTML = p.certs.map(c => `<div class="text-xs bg-slate-50 p-1 mb-1 border">${new Date(c.date).toLocaleDateString()} - ${c.type}</div>`).join('');
+            let content = type.includes("Medical") ? `This is to certify that <strong>${p.name}</strong> (ID: ${p.id}) is under my treatment for <strong>${body}</strong>. Advised rest for <strong>${days} days</strong> from <strong>${document.getElementById('c-from').value}</strong> to <strong>${document.getElementById('c-to').value}</strong>.` : `This is to certify that <strong>${p.name}</strong> (ID: ${p.id}) is under my care. ${body}`;
+            let html = `<div class="${sz}">${getHeader()}<div style="flex-grow:1;"><h2 style="text-align:center; text-decoration:underline; margin:30px 0; font-size:14pt;">${type.toUpperCase()}</h2><div style="font-size:12pt; line-height:1.8; text-align:justify;">${content}</div></div><div style="text-align:right; margin-top:auto;"><p style="font-weight:bold;">Dr. K Nishanth Pai</p><p style="font-size:10px;">Signature & Seal</p></div></div>`;
+            doPrint(html, sz);
+        }
+
+        function printStatsView() {
+            if(!window.anaData) return alert("Run stats first");
+            const st = window.anaData;
+            let html = `
+            <div class="size-a4">
+                <h2 style="text-align:center; margin-bottom:10px; font-size:16pt; font-weight:bold;">STATISTICAL REPORT</h2>
+                <p style="text-align:center; font-size:10pt; margin-bottom:20px;">Period: ${document.getElementById('anaFrom').value} to ${document.getElementById('anaTo').value}</p>
+                <table class="summary-table">
+                    <tr>
+                        <td><div class="summary-label">New Cases</div><div class="summary-val">${st.n}</div></td>
+                        <td><div class="summary-label">Follow-ups</div><div class="summary-val">${st.r}</div></td>
+                        <td><div class="summary-label">Male</div><div class="summary-val">${st.m}</div></td>
+                        <td><div class="summary-label">Female</div><div class="summary-val">${st.f}</div></td>
+                    </tr>
+                </table>
+                <div class="stat-grid">
+                    ${getTable(st.diag, "Diagnosis Breakdown")}
+                    ${getTable(st.age, "Age Distribution")}
+                    ${getTable(st.wt, "Weight Range")}
+                    ${getTable(st.bp, "BP Range")}
+                    ${getTable(st.pulse, "Pulse Range")}
+                </div>
+            </div>`;
+            doPrint(html, 'size-a4');
+        }
+        
+        const getTable = (data, title) => {
+            let h = `<div style="margin-bottom:15px;"><h4 style="margin:0 0 5px 0; font-size:10pt; text-transform:uppercase; border-bottom:1px solid #333;">${title}</h4><table class="print-table"><tr><th width="70%">ITEM</th><th width="30%">COUNT</th></tr>`;
+            let keys = Object.keys(data);
+            if(title.includes("Diag")) keys.sort((a,b)=>data[b]-data[a]); else keys.sort();
+            keys.forEach(k => h += `<tr><td>${k}</td><td>${data[k]}</td></tr>`);
+            return h + "</table></div>";
+        };
+
+        function toggleCertUI() { document.getElementById('leave-box').style.display = document.getElementById('c-type').value.includes('Medical') ? 'grid' : 'none'; }
+        window.onload = () => showSection('dashboard');
+    </script>
+</body>
+</html>
