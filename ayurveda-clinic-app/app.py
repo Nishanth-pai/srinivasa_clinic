@@ -1,13 +1,24 @@
 import streamlit as st
 import firebase_admin
 from firebase_admin import credentials, firestore
+import json
 
 # --- 1. FIREBASE INITIALIZATION ---
 if not firebase_admin._apps:
-    cred = credentials.Certificate('firebase_key.json')
+    # Check if we are running on Streamlit Cloud (checking for the secret)
+    if "FIREBASE_KEY" in st.secrets:
+        # Load the secret string and convert it back to a dictionary
+        key_dict = json.loads(st.secrets["FIREBASE_KEY"])
+        cred = credentials.Certificate(key_dict)
+    else:
+        # Running locally on your Mac, use the physical file
+        cred = credentials.Certificate('firebase_key.json')
+    
     firebase_admin.initialize_app(cred)
 
 db = firestore.client()
+
+# ... (Keep the rest of your app.py exactly the same below this line) ...
 
 # --- 2. PAGE FUNCTIONS ---
 def home_page():
