@@ -116,17 +116,15 @@ def consultant_portal():
         with tab2:
             st.subheader("Search Patients")
             
-            # 1. We create a memory block to remember what we are searching for
+            # Remember the search query to prevent Streamlit from reloading early
             if "search_query" not in st.session_state:
                 st.session_state.search_query = ""
                 
             search_input = st.text_input("Search by Name, Phone, or Diagnosis").lower()
             
-            # 2. When you click Search, it saves the input into memory
             if st.button("Search") and search_input:
                 st.session_state.search_query = search_input
                 
-            # 3. We run the results based on memory, NOT the button click!
             if st.session_state.search_query:
                 docs = db.collection("patients").stream()
                 found = False
@@ -137,92 +135,111 @@ def consultant_portal():
                         found = True
                         doc_id = doc.id  
                         
-                        with st.expander(f"🩺 {data.get('name')} - {data.get('phone')}"):
+                        with st.expander(f"🩺 {data.get('name')} - {data.get('phone')}", expanded=True):
                             
-                            # --- FULL PATIENT PROFILE ---
-                            st.markdown("### 📋 Complete Patient Profile")
+                            # --- 1. PATIENT SUMMARY ---
+                            st.markdown("### 📋 Patient Summary")
+                            visits = data.get('visits', [])
+                            
+                            # Find the most recent diagnosis to display in the summary
+                            if visits and visits[-1].get('diagnosis'):
+                                latest_diagnosis = visits[-1]['diagnosis']
+                            else:
+                                latest_diagnosis = data.get('diagnosis', 'Not specified')
+                                
                             col_a, col_b = st.columns(2)
-                            col_a.write(f"**Age:** {data.get('age')}")
-                            col_a.write(f"**Phone:** {data.get('phone')}")
-                            col_b.write(f"**Address:** {data.get('address')}")
+                            col_a.write(f"**Name:** {data.get('name')}")
+                            col_a.write(f"**Age:** {data.get('age')} | **Phone:** {data.get('phone')}")
                             
-                            st.divider()
-                            st.write(f"**Chief Complaints:** {data.get('chief_complaints')}")
-                            st.write(f"**Co-morbidities:** {data.get('co_morbidities')}")
-                            st.write(f"**Examinations:** {data.get('examinations')}")
-                            st.write(f"**Investigations:** {data.get('investigations')}")
-                            
-                            st.divider()
-                            st.write("**Diagnosis History:**")
-                            st.info(data.get('diagnosis'))
-                            
-                            st.write("**Prescription History:**")
-                            st.info(data.get('prescription'))
-                            
-                            st.write("**Additional Notes History:**")
-                            st.info(data.get('notes'))
-                            
-                            # --- PRINT FEATURE ---
-                            html_content = f"""
-                            <html>
-                            <head><title>Prescription - {data.get('name')}</title></head>
-                            <body style="font-family: sans-serif; padding: 40px; max-width: 800px; margin: auto;">
-                                <h1 style="text-align: center; color: #2c3e50;">Srinivasa Clinic</h1>
-                                <hr>
-                                <p><strong>Patient Name:</strong> {data.get('name')} <span style="float: right;"><strong>Age:</strong> {data.get('age')}</span></p>
-                                <p style="white-space: pre-wrap; line-height: 1.6;"><strong>Diagnosis History:</strong><br>{data.get('diagnosis')}</p>
-                                <br>
-                                <h3>Prescription (Rx):</h3>
-                                <p style="white-space: pre-wrap; line-height: 1.6;">{data.get('prescription')}</p>
-                                <br><br><br><br>
-                                <hr>
-                                <p style="text-align: right;">Doctor's Signature: ______________________</p>
-                                <script>window.print();</script>
-                            </body>
-                            </html>
-                            """
-                            
-                            st.download_button(
-                                label="🖨️ Download & Print Prescription Paper",
-                                data=html_content,
-                                file_name=f"{str(data.get('name')).replace(' ', '_')}_Prescription.html",
-                                mime="text/html"
-                            )
+                            col_b.write(f"**Total Visits:** {len(visits) + 1}")
+                            col_b.write(f"**Latest Diagnosis:** {latest_diagnosis}")
                             
                             st.divider()
                             
-                            # --- REPEAT CONSULTATION FEATURE ---
+                            # --- 2. VISIT HISTORY (COLLAPSIBLE) ---
+                            st.markdown("### 🗓️ Visit History")
+                            
+                            # Original / First Visit
+                            with st.expander(f"First Visit - {data.get('diagnosis', 'No Diagnosis')}"):
+                                st.write(f"**Complaints:** {data.get('chief_complaints')}")
+                                st.write(f"**Diagnosis:** {data.get('diagnosis')}")
+                                st.write(f"**Prescription:** {data.get('prescription')}")
+                                
+                                html_first = f"""
+                                <html>
+                                <body style="font-family: sans-serif; padding: 40px; max-width: 800px; margin: auto;">
+                                    <h1 style="text-align: center; color: #2c3e50;">Srinivasa Clinic</h1>
+                                    <hr>
+                                    <p><strong>Patient Name:</strong> {data.get('name')} <span style="float: right;"><strong>Age:</strong> {data.get('age')}</span></p>
+                                    <p><strong>Diagnosis:</strong> {data.get('diagnosis')}</p>
+                                    <p><strong>Complaints:</strong> {data.get('chief_complaints')}</p>
+                                    <br>
+                                    <h3>Prescription (Rx):</h3>
+                                    <p style="white-space: pre-wrap; line-height: 1.6;">{data.get('prescription')}</p>
+                                    <br><br><br><br><hr>
+                                    <p style="text-align: right;">Doctor's Signature: ______________________</p>
+                                    <script>window.print();</script>
+                                </body>
+                                </html>
+                                """
+                                st.download_button("🖨️ Print First Visit", data=html_first, file_name=f"{str(data.get('name'))}_FirstVisit.html", mime="text/html", key=f"print_orig_{doc_id}")
+                            
+                            # Follow-up Visits
+                            for idx, visit in enumerate(visits):
+                                with st.expander(f"Follow-up: {visit.get('date')} - {visit.get('diagnosis')}"):
+                                    st.write(f"**Complaints:** {visit.get('complaints')}")
+                                    st.write(f"**Diagnosis:** {visit.get('diagnosis')}")
+                                    st.write(f"**Prescription:** {visit.get('prescription')}")
+                                    
+                                    html_followup = f"""
+                                    <html>
+                                    <body style="font-family: sans-serif; padding: 40px; max-width: 800px; margin: auto;">
+                                        <h1 style="text-align: center; color: #2c3e50;">Srinivasa Clinic</h1>
+                                        <hr>
+                                        <p><strong>Patient Name:</strong> {data.get('name')} <span style="float: right;"><strong>Age:</strong> {data.get('age')}</span></p>
+                                        <p><strong>Date:</strong> {visit.get('date')}</p>
+                                        <p><strong>Diagnosis:</strong> {visit.get('diagnosis')}</p>
+                                        <p><strong>Complaints:</strong> {visit.get('complaints')}</p>
+                                        <br>
+                                        <h3>Prescription (Rx):</h3>
+                                        <p style="white-space: pre-wrap; line-height: 1.6;">{visit.get('prescription')}</p>
+                                        <br><br><br><br><hr>
+                                        <p style="text-align: right;">Doctor's Signature: ______________________</p>
+                                        <script>window.print();</script>
+                                    </body>
+                                    </html>
+                                    """
+                                    st.download_button("🖨️ Print This Visit", data=html_followup, file_name=f"{str(data.get('name'))}_{visit.get('date')}.html", mime="text/html", key=f"print_{doc_id}_{idx}")
+
+                            st.divider()
+                            
+                            # --- 3. REPEAT CONSULTATION FEATURE ---
                             with st.form(f"follow_up_{doc_id}"):
                                 st.markdown("### 🔄 Add Follow-up Visit")
                                 today_date = datetime.now().strftime("%Y-%m-%d")
-                                
                                 st.caption(f"Date: {today_date}")
-                                new_complaints = st.text_area("New Consultation Notes / Complaints")
-                                new_diagnosis = st.text_input("New Diagnosis (Leave blank if unchanged)")
-                                new_prescription = st.text_area("New Prescription")
+                                
+                                new_complaints = st.text_area("Complaints / Notes for today")
+                                new_diagnosis = st.text_input("Current Diagnosis", value=latest_diagnosis)
+                                new_prescription = st.text_area("Prescription for today")
                                 
                                 if st.form_submit_button("Save Follow-up"):
-                                    updated_diagnosis = data.get('diagnosis', '')
-                                    updated_prescription = data.get('prescription', '')
-                                    updated_notes = data.get('notes', '')
+                                    # Create an isolated package for just today's visit
+                                    new_visit = {
+                                        "date": today_date,
+                                        "complaints": new_complaints,
+                                        "diagnosis": new_diagnosis,
+                                        "prescription": new_prescription
+                                    }
                                     
-                                    if new_diagnosis.strip():
-                                        updated_diagnosis += f"\n\n--- Follow up ({today_date}) ---\n{new_diagnosis}"
-                                        
-                                    if new_prescription.strip():
-                                        updated_prescription += f"\n\n--- Follow up ({today_date}) ---\n{new_prescription}"
-                                        
-                                    if new_complaints.strip():
-                                        updated_notes += f"\n\n--- Follow up ({today_date}) ---\n{new_complaints}"
+                                    # Add it to the list of historical visits
+                                    updated_visits = visits + [new_visit]
                                     
                                     db.collection("patients").document(doc_id).update({
-                                        "diagnosis": updated_diagnosis,
-                                        "prescription": updated_prescription,
-                                        "notes": updated_notes
+                                        "visits": updated_visits
                                     })
                                     
-                                    # 4. This forces the app to instantly reload so the new data populates immediately
-                                    st.success(f"Follow-up saved!")
+                                    st.success("Follow-up saved!")
                                     st.rerun()
                 
                 if not found:
