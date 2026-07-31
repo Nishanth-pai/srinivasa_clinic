@@ -2,6 +2,7 @@ import streamlit as st
 import firebase_admin
 from firebase_admin import credentials, firestore
 import json
+import requests
 
 # --- 1. FIREBASE INITIALIZATION ---
 if not firebase_admin._apps:
@@ -43,9 +44,38 @@ def home_page():
 
 def consultant_portal():
     st.title("👨‍⚕️ Consultant Dashboard")
-    password = st.sidebar.text_input("Enter Admin Password", type="password")
     
-    if password == "ayurveda123": 
+    # Check if the user is already logged in during this session
+    if "user_token" not in st.session_state:
+        st.session_state.user_token = None
+
+    # Login Form
+    if st.session_state.user_token is None:
+        st.subheader("Please Log In")
+        email = st.sidebar.text_input("Email")
+        password = st.sidebar.text_input("Password", type="password")
+        
+        if st.sidebar.button("Log In"):
+            api_key = st.secrets["FIREBASE_WEB_API_KEY"]
+            url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={api_key}"
+            payload = {"email": email, "password": password, "returnSecureToken": True}
+            
+            response = requests.post(url, json=payload)
+            auth_data = response.json()
+            
+            if "idToken" in auth_data:
+                st.session_state.user_token = auth_data["idToken"]
+                st.sidebar.success("Logged in successfully!")
+                st.rerun() # Refresh the page to show the dashboard
+            else:
+                st.sidebar.error("Invalid Email or Password.")
+    
+    # Dashboard (Only visible if logged in)
+    if st.session_state.user_token is not None:
+        if st.sidebar.button("Log Out"):
+            st.session_state.user_token = None
+            st.rerun()
+            
         tab1, tab2 = st.tabs(["Add New Patient", "Search Database"])
         
         # --- TAB 1: REGISTRATION FORM ---
@@ -98,8 +128,6 @@ def consultant_portal():
                     st.dataframe(results)
                 else:
                     st.warning("No records found matching that query.")
-    else:
-        st.warning("Please enter the correct password in the sidebar.")
 
 def student_portal():
     st.title("📚 Student Learning Corner")
