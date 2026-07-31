@@ -3,6 +3,7 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 import json
 import requests
+from datetime import datetime
 
 # --- 1. FIREBASE INITIALIZATION ---
 if not firebase_admin._apps:
@@ -112,21 +113,79 @@ def consultant_portal():
                     st.success(f"Record for {name} saved successfully!")
                     
         # --- TAB 2: SEARCH DATABASE ---
+        # --- TAB 2: SEARCH DATABASE ---
         with tab2:
             st.subheader("Search Patients")
             search_query = st.text_input("Search by Name, Phone, or Diagnosis").lower()
             
-            if st.button("Search"):
+            if st.button("Search") and search_query:
                 docs = db.collection("patients").stream()
-                results = []
+                found = False
+                
                 for doc in docs:
                     data = doc.to_dict()
                     if search_query in str(data).lower():
-                        results.append(data)
+                        found = True
+                        doc_id = doc.id  # We need the specific Firestore ID to update the record
+                        
+                        # Create an expandable card for each matching patient
+                        with st.expander(f"🩺 {data.get('name')} - {data.get('phone')}"):
+                            st.write(f"**Age:** {data.get('age')} | **Diagnosis:** {data.get('diagnosis')}")
+                            st.write(f"**Current Prescription:** {data.get('prescription')}")
+                            
+                            # --- PRINT FEATURE ---
+                            # This generates a clean HTML file that auto-triggers the print dialog
+                            html_content = f"""
+                            <html>
+                            <head><title>Prescription - {data.get('name')}</title></head>
+                            <body style="font-family: sans-serif; padding: 40px; max-width: 800px; margin: auto;">
+                                <h1 style="text-align: center; color: #2c3e50;">Srinivasa Clinic</h1>
+                                <hr>
+                                <p><strong>Patient Name:</strong> {data.get('name')} <span style="float: right;"><strong>Age:</strong> {data.get('age')}</span></p>
+                                <p><strong>Diagnosis:</strong> {data.get('diagnosis')}</p>
+                                <br>
+                                <h3>Prescription (Rx):</h3>
+                                <p style="white-space: pre-wrap; line-height: 1.6;">{data.get('prescription')}</p>
+                                <br><br><br><br>
+                                <hr>
+                                <p style="text-align: right;">Doctor's Signature: ______________________</p>
+                                <script>window.print();</script>
+                            </body>
+                            </html>
+                            """
+                            
+                            st.download_button(
+                                label="🖨️ Download & Print Prescription Paper",
+                                data=html_content,
+                                file_name=f"{str(data.get('name')).replace(' ', '_')}_Prescription.html",
+                                mime="text/html"
+                            )
+                            
+                            st.divider()
+                            
+                            # --- REPEAT CONSULTATION FEATURE ---
+                            with st.form(f"follow_up_{doc_id}"):
+                                st.markdown("### 🔄 Add Follow-up Visit")
+                                today_date = datetime.now().strftime("%Y-%m-%d")
+                                
+                                new_notes = st.text_area("Consultation Notes / Complaints")
+                                new_diagnosis = st.text_input("Update Diagnosis (if changed)", value=data.get('diagnosis', ''))
+                                new_prescription = st.text_area("New Prescription")
+                                
+                                if st.form_submit_button("Save Follow-up"):
+                                    # Append the new data with timestamps to keep a running history
+                                    updated_prescription = f"{data.get('prescription', '')}\n\n--- Follow up ({today_date}) ---\n{new_prescription}"
+                                    updated_notes = f"{data.get('notes', '')}\n\n--- Follow up ({today_date}) ---\n{new_notes}"
+                                    
+                                    # Update the existing document in Firestore instead of creating a new one
+                                    db.collection("patients").document(doc_id).update({
+                                        "diagnosis": new_diagnosis,
+                                        "prescription": updated_prescription,
+                                        "notes": updated_notes
+                                    })
+                                    st.success(f"Follow-up for {data.get('name')} saved successfully! Please click Search again to refresh.")
                 
-                if results:
-                    st.dataframe(results)
-                else:
+                if not found:
                     st.warning("No records found matching that query.")
 
 def student_portal():
