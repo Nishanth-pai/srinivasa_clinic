@@ -113,7 +113,6 @@ def consultant_portal():
                     st.success(f"Record for {name} saved successfully!")
                     
         # --- TAB 2: SEARCH DATABASE ---
-        # --- TAB 2: SEARCH DATABASE ---
         with tab2:
             st.subheader("Search Patients")
             search_query = st.text_input("Search by Name, Phone, or Diagnosis").lower()
@@ -126,15 +125,35 @@ def consultant_portal():
                     data = doc.to_dict()
                     if search_query in str(data).lower():
                         found = True
-                        doc_id = doc.id  # We need the specific Firestore ID to update the record
+                        doc_id = doc.id  
                         
                         # Create an expandable card for each matching patient
                         with st.expander(f"🩺 {data.get('name')} - {data.get('phone')}"):
-                            st.write(f"**Age:** {data.get('age')} | **Diagnosis:** {data.get('diagnosis')}")
-                            st.write(f"**Current Prescription:** {data.get('prescription')}")
+                            
+                            # --- FULL PATIENT PROFILE ---
+                            st.markdown("### 📋 Complete Patient Profile")
+                            col_a, col_b = st.columns(2)
+                            col_a.write(f"**Age:** {data.get('age')}")
+                            col_a.write(f"**Phone:** {data.get('phone')}")
+                            col_b.write(f"**Address:** {data.get('address')}")
+                            
+                            st.divider()
+                            st.write(f"**Chief Complaints:** {data.get('chief_complaints')}")
+                            st.write(f"**Co-morbidities:** {data.get('co_morbidities')}")
+                            st.write(f"**Examinations:** {data.get('examinations')}")
+                            st.write(f"**Investigations:** {data.get('investigations')}")
+                            
+                            st.divider()
+                            st.write("**Diagnosis History:**")
+                            st.info(data.get('diagnosis'))
+                            
+                            st.write("**Prescription History:**")
+                            st.info(data.get('prescription'))
+                            
+                            st.write("**Additional Notes History:**")
+                            st.info(data.get('notes'))
                             
                             # --- PRINT FEATURE ---
-                            # This generates a clean HTML file that auto-triggers the print dialog
                             html_content = f"""
                             <html>
                             <head><title>Prescription - {data.get('name')}</title></head>
@@ -142,7 +161,7 @@ def consultant_portal():
                                 <h1 style="text-align: center; color: #2c3e50;">Srinivasa Clinic</h1>
                                 <hr>
                                 <p><strong>Patient Name:</strong> {data.get('name')} <span style="float: right;"><strong>Age:</strong> {data.get('age')}</span></p>
-                                <p><strong>Diagnosis:</strong> {data.get('diagnosis')}</p>
+                                <p style="white-space: pre-wrap; line-height: 1.6;"><strong>Diagnosis History:</strong><br>{data.get('diagnosis')}</p>
                                 <br>
                                 <h3>Prescription (Rx):</h3>
                                 <p style="white-space: pre-wrap; line-height: 1.6;">{data.get('prescription')}</p>
@@ -168,18 +187,30 @@ def consultant_portal():
                                 st.markdown("### 🔄 Add Follow-up Visit")
                                 today_date = datetime.now().strftime("%Y-%m-%d")
                                 
-                                new_notes = st.text_area("Consultation Notes / Complaints")
-                                new_diagnosis = st.text_input("Update Diagnosis (if changed)", value=data.get('diagnosis', ''))
+                                st.caption(f"Date: {today_date}")
+                                new_complaints = st.text_area("New Consultation Notes / Complaints")
+                                new_diagnosis = st.text_input("New Diagnosis (Leave blank if unchanged)")
                                 new_prescription = st.text_area("New Prescription")
                                 
                                 if st.form_submit_button("Save Follow-up"):
-                                    # Append the new data with timestamps to keep a running history
-                                    updated_prescription = f"{data.get('prescription', '')}\n\n--- Follow up ({today_date}) ---\n{new_prescription}"
-                                    updated_notes = f"{data.get('notes', '')}\n\n--- Follow up ({today_date}) ---\n{new_notes}"
+                                    # Start with the existing data
+                                    updated_diagnosis = data.get('diagnosis', '')
+                                    updated_prescription = data.get('prescription', '')
+                                    updated_notes = data.get('notes', '')
                                     
-                                    # Update the existing document in Firestore instead of creating a new one
+                                    # Only append new text if the doctor actually typed something in the box
+                                    if new_diagnosis.strip():
+                                        updated_diagnosis += f"\n\n--- Follow up ({today_date}) ---\n{new_diagnosis}"
+                                        
+                                    if new_prescription.strip():
+                                        updated_prescription += f"\n\n--- Follow up ({today_date}) ---\n{new_prescription}"
+                                        
+                                    if new_complaints.strip():
+                                        updated_notes += f"\n\n--- Follow up ({today_date}) ---\n{new_complaints}"
+                                    
+                                    # Update the existing document
                                     db.collection("patients").document(doc_id).update({
-                                        "diagnosis": new_diagnosis,
+                                        "diagnosis": updated_diagnosis,
                                         "prescription": updated_prescription,
                                         "notes": updated_notes
                                     })
