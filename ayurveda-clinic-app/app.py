@@ -115,19 +115,28 @@ def consultant_portal():
         # --- TAB 2: SEARCH DATABASE ---
         with tab2:
             st.subheader("Search Patients")
-            search_query = st.text_input("Search by Name, Phone, or Diagnosis").lower()
             
-            if st.button("Search") and search_query:
+            # 1. We create a memory block to remember what we are searching for
+            if "search_query" not in st.session_state:
+                st.session_state.search_query = ""
+                
+            search_input = st.text_input("Search by Name, Phone, or Diagnosis").lower()
+            
+            # 2. When you click Search, it saves the input into memory
+            if st.button("Search") and search_input:
+                st.session_state.search_query = search_input
+                
+            # 3. We run the results based on memory, NOT the button click!
+            if st.session_state.search_query:
                 docs = db.collection("patients").stream()
                 found = False
                 
                 for doc in docs:
                     data = doc.to_dict()
-                    if search_query in str(data).lower():
+                    if st.session_state.search_query in str(data).lower():
                         found = True
                         doc_id = doc.id  
                         
-                        # Create an expandable card for each matching patient
                         with st.expander(f"🩺 {data.get('name')} - {data.get('phone')}"):
                             
                             # --- FULL PATIENT PROFILE ---
@@ -193,12 +202,10 @@ def consultant_portal():
                                 new_prescription = st.text_area("New Prescription")
                                 
                                 if st.form_submit_button("Save Follow-up"):
-                                    # Start with the existing data
                                     updated_diagnosis = data.get('diagnosis', '')
                                     updated_prescription = data.get('prescription', '')
                                     updated_notes = data.get('notes', '')
                                     
-                                    # Only append new text if the doctor actually typed something in the box
                                     if new_diagnosis.strip():
                                         updated_diagnosis += f"\n\n--- Follow up ({today_date}) ---\n{new_diagnosis}"
                                         
@@ -208,13 +215,15 @@ def consultant_portal():
                                     if new_complaints.strip():
                                         updated_notes += f"\n\n--- Follow up ({today_date}) ---\n{new_complaints}"
                                     
-                                    # Update the existing document
                                     db.collection("patients").document(doc_id).update({
                                         "diagnosis": updated_diagnosis,
                                         "prescription": updated_prescription,
                                         "notes": updated_notes
                                     })
-                                    st.success(f"Follow-up for {data.get('name')} saved successfully! Please click Search again to refresh.")
+                                    
+                                    # 4. This forces the app to instantly reload so the new data populates immediately
+                                    st.success(f"Follow-up saved!")
+                                    st.rerun()
                 
                 if not found:
                     st.warning("No records found matching that query.")
