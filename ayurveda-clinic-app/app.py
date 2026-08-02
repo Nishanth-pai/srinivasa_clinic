@@ -514,19 +514,47 @@ def render_laghu_guru_html(syllables, pattern):
 
 def fetch_native_dictionary(word):
     """
-    Queries the Sabda-kalpadruma. Automatically tests modern spellings, 
-    classical Paninian consonant doubling, and traditional dictionary 
-    case endings (visarga/anusvara) to guarantee a match.
+    Advanced dual-dictionary query engine. 
+    Strips suffixes, tests Paninian spellings, and falls back to Monier-Williams 
+    if Sabda-kalpadruma does not have the word.
     """
-    base_url = "https://www.sanskrit-lexicon.uni-koeln.de/scans/SKDScan/2020/web/webtc/getword.php?input=deva&output=deva&key="
+    # 1. Clean accidental invisible spaces from typing
+    raw_word = word.strip()
     
-    def fetch_from_api(search_term):
+    # 2. Extract the bare stem by stripping common case endings
+    base_stem = raw_word
+    if raw_word.endswith("ः") or raw_word.endswith("ं"):
+        base_stem = raw_word[:-1]
+    elif raw_word.endswith("म्"):
+        base_stem = raw_word[:-2]
+        
+    # 3. Apply classical Paninian doubling rules for Sabda-kalpadruma
+    classical_base = base_stem.replace("र्त", "र्त्त").replace("र्ति", "र्त्ति").replace("र्य", "र्य्य").replace("र्व", "र्व्व")
+    
+    # 4. Generate all possible indexing formats based purely on the stem
+    search_variations = [
+        raw_word,                  # 1. Exact input
+        base_stem,                 # 2. Bare stem (e.g., ग्रन्थ)
+        f"{base_stem}ः",           # 3. Stem + Visarga (e.g., ग्रन्थः)
+        f"{base_stem}म्",          # 4. Stem + Neuter 'm'
+        f"{base_stem}ं",           # 5. Stem + Anusvara
+        classical_base,            # 6. Doubled stem
+        f"{classical_base}ः",      # 7. Doubled + Visarga
+        f"{classical_base}म्",     # 8. Doubled + Neuter
+        f"{classical_base}ं"       # 9. Doubled + Anusvara
+    ]
+    
+    # Remove duplicates but keep the order
+    search_variations = list(dict.fromkeys(search_variations))
+    
+    def fetch_from_api(search_term, dict_code="SKDScan"):
+        url = f"https://www.sanskrit-lexicon.uni-koeln.de/scans/{dict_code}/2020/web/webtc/getword.php?input=deva&output=deva&key={search_term}"
         try:
-# ... (rest of the code continues, maintaining the indents) ...
-            response = requests.get(base_url + search_term, timeout=8)
+            response = requests.get(url, timeout=8)
             if response.status_code == 200:
                 soup = BeautifulSoup(response.text, 'html.parser')
                 raw_text = soup.get_text(separator=' ', strip=True)
+                
                 if "not found" in raw_text.lower() or "error" in raw_text.lower():
                     return None
                 
@@ -536,6 +564,23 @@ def fetch_native_dictionary(word):
             return None
         except Exception:
             return None
+
+    # PHASE 1: Query Sabda-kalpadruma (SKDScan)
+    for variant in search_variations:
+        result = fetch_from_api(variant, "SKDScan")
+        if result:
+            prefix = "" if variant == raw_word else f"*(Found in Sabda-kalpadruma as: **{variant}**)*\n\n"
+            return prefix + result
+            
+    # PHASE 2: Fallback to Monier-Williams (MWScan) if Sabda-kalpadruma fails
+    # Monier-Williams prefers the bare stem (e.g., 'इन्द्र')
+    for variant in [base_stem, raw_word]:
+        result = fetch_from_api(variant, "MWScan")
+        if result:
+            prefix = f"*(Word not in Sabda-kalpadruma. Found in Monier-Williams as: **{variant}**)*\n\n"
+            return prefix + result
+            
+    return None
 
     # 1. First attempt: Search exactly what the user typed
     result = fetch_from_api(word)
