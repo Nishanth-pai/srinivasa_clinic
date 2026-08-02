@@ -404,10 +404,28 @@ def split_into_padas(verse_text):
         
     return structured_padas
 
+def split_into_padas(verse_text):
+    """
+    Cleans and splits a Sanskrit verse into its constituent padas.
+    Handles traditional dandas (।, ॥), English pipes (|), and standard line breaks.
+    """
+    # Now catches English keyboard pipes and standardizes everything
+    normalized_text = verse_text.replace("॥", "।").replace("\n", "।").replace("|", "।")
+    
+    # Split the text at the danda and remove any extra whitespace
+    raw_padas = [p.strip() for p in normalized_text.split("।") if p.strip()]
+    
+    # Organize into a dictionary format
+    structured_padas = {}
+    for i, pada in enumerate(raw_padas):
+        structured_padas[f"Pada {i+1}"] = pada
+        
+    return structured_padas
+
 def get_prosody_details(pada_text):
     """
     Approximates the syllables, Laghu (I) / Guru (S) pattern, 
-    and Chandas for a given Sanskrit pada.
+    and Chandas for a given Sanskrit pada (even if merged).
     """
     # Remove spaces to analyze pure syllables
     clean_text = pada_text.replace(" ", "")
@@ -439,18 +457,31 @@ def get_prosody_details(pada_text):
             
         pattern.append("S" if is_guru else "I")
         
-    # 3. Identify Chandas by Syllable Count
+    # 3. Smart Chandas Identification (Now handles merged Padas with NO dandas)
     syl_count = len(syllables)
+    
     if syl_count == 8:
         chandas = "Anushtubh (8 syllables)"
+    elif syl_count == 16:
+        chandas = "Anushtubh (16 syllables - 2 Merged Padas)"
+    elif syl_count == 32:
+        chandas = "Anushtubh (32 syllables - Full Verse)"
     elif syl_count == 11:
         chandas = "Trishtubh Family (11 syllables - e.g., Indravajra)"
+    elif syl_count == 22:
+        chandas = "Trishtubh Family (22 syllables - 2 Merged Padas)"
     elif syl_count == 12:
         chandas = "Jagati Family (12 syllables - e.g., Vamshastha)"
+    elif syl_count == 24:
+        chandas = "Jagati Family (24 syllables - 2 Merged Padas)"
     elif syl_count == 14:
         chandas = "Vasantatilaka (14 syllables)"
+    elif syl_count == 28:
+        chandas = "Vasantatilaka (28 syllables - 2 Merged Padas)"
     elif syl_count == 19:
         chandas = "Shardulavikridita (19 syllables)"
+    elif syl_count == 38:
+        chandas = "Shardulavikridita (38 syllables - 2 Merged Padas)"
     else:
         chandas = f"Mixed / Unknown ({syl_count} syllables)"
         
@@ -516,7 +547,6 @@ def student_portal():
                     st.caption(f"**Identified Meter:** {chandas}")
                     st.markdown("<hr style='margin-top: 5px; margin-bottom: 15px;'>", unsafe_allow_html=True)
             
-            st.markdown("### Clinical Understanding")
             st.markdown("### Clinical Understanding")
             
             # A mini-dictionary to hold your verse meanings
