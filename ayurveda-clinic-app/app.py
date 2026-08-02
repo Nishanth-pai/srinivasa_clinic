@@ -392,7 +392,6 @@ def split_into_padas(verse_text):
     Cleans and splits a Sanskrit verse into its constituent padas.
     Handles traditional dandas (।, ॥) and standard line breaks.
     """
-    # Replace double dandas and line breaks with a single danda for uniform splitting
     normalized_text = verse_text.replace("॥", "।").replace("\n", "।")
     
     # Split the text at the single danda and remove any extra whitespace
@@ -405,6 +404,72 @@ def split_into_padas(verse_text):
         
     return structured_padas
 
+def get_prosody_details(pada_text):
+    """
+    Approximates the syllables, Laghu (I) / Guru (S) pattern, 
+    and Chandas for a given Sanskrit pada.
+    """
+    # Remove spaces to analyze pure syllables
+    clean_text = pada_text.replace(" ", "")
+    
+    syllables = []
+    temp = ""
+    
+    # 1. Break down into Syllables (Aksharas)
+    for i, char in enumerate(clean_text):
+        temp += char
+        if i + 1 < len(clean_text):
+            next_char = clean_text[i+1]
+            if next_char not in ['ा', 'ि', 'ी', 'ु', 'ू', 'ृ', 'ॄ', 'े', 'ै', 'ो', 'ौ', 'ं', 'ः', '्'] and char != '्':
+                syllables.append(temp)
+                temp = ""
+        else:
+            syllables.append(temp)
+            
+    # 2. Assign Laghu (I) or Guru (S)
+    guru_markers = ['ा', 'ी', 'ू', 'े', 'ै', 'ो', 'ौ', 'ं', 'ः']
+    pattern = []
+    
+    for idx, syl in enumerate(syllables):
+        is_guru = False
+        if any(m in syl for m in guru_markers):
+            is_guru = True
+        if idx + 1 < len(syllables) and '्' in syllables[idx+1]:
+            is_guru = True
+            
+        pattern.append("S" if is_guru else "I")
+        
+    # 3. Identify Chandas by Syllable Count
+    syl_count = len(syllables)
+    if syl_count == 8:
+        chandas = "Anushtubh (8 syllables)"
+    elif syl_count == 11:
+        chandas = "Trishtubh Family (11 syllables - e.g., Indravajra)"
+    elif syl_count == 12:
+        chandas = "Jagati Family (12 syllables - e.g., Vamshastha)"
+    elif syl_count == 14:
+        chandas = "Vasantatilaka (14 syllables)"
+    elif syl_count == 19:
+        chandas = "Shardulavikridita (19 syllables)"
+    else:
+        chandas = f"Mixed / Unknown ({syl_count} syllables)"
+        
+    return syllables, pattern, chandas
+
+def render_laghu_guru_html(syllables, pattern):
+    """Generates HTML to stack the Laghu/Guru marks directly over the text."""
+    html = "<div style='display: flex; flex-wrap: wrap; margin-bottom: 15px;'>"
+    for syl, mark in zip(syllables, pattern):
+        color = "#e74c3c" if mark == 'S' else "#3498db"
+        html += f'''
+            <div style='display: flex; flex-direction: column; align-items: center; margin-right: 8px; font-family: sans-serif;'>
+                <span style='font-size: 16px; font-weight: bold; color: {color};'>{mark}</span>
+                <span style='font-size: 22px; color: #2c3e50;'>{syl}</span>
+            </div>
+        '''
+    html += "</div>"
+    return html
+
 def student_portal():
     st.title("📚 Student Learning Corner")
     st.write("Welcome to the academic portal. Explore classical text analyses, clinical understandings, and new inventions.")
@@ -414,24 +479,37 @@ def student_portal():
     # --- TAB 1: VERSE ANALYSIS ---
     with tab1:
         st.subheader("Verse Breakdown & Prosody")
-        st.write("Analyze the structure and clinical meaning of classical verses.")
+        st.write("Analyze the structure, meter (Chandas), and clinical meaning of classical verses.")
         
-        # We updated the default text slightly to include dandas for a clear demo
-        verse_input = st.text_area("Enter Verse (Sloka)", "तत्र पूर्वं ज्वरे कुर्याल् । लङ्घनं जलदोषात् ॥")
+        col1, col2 = st.columns(2)
+        verse_input = col1.text_area("1. Enter Raw Verse (Sloka)", "तत्र पूर्वं ज्वरे कुर्याल् । लङ्घनं जलदोषात् ॥")
+        split_input = col2.text_area("2. Enter Split Version (Padacheda)", "तत्र पूर्वम् ज्वरे कुर्यात् । लङ्घनम् जलदोषात् ॥")
         
-        if st.button("Analyze Verse"):
-            st.markdown("### Structural Analysis")
+        if st.button("Analyze Verse") and verse_input:
+            st.divider()
             
-            # Run the dynamic parsing function on the user's input
-            pada_dictionary = split_into_padas(verse_input)
+            # Prioritize the Padacheda (split text) if the user provides it
+            text_to_process = split_input if split_input.strip() else verse_input
+            pada_dictionary = split_into_padas(text_to_process)
             
-            if pada_dictionary:
-                st.success("Verse successfully parsed.")
-                # Dynamically print out each pada exactly as it was split
-                for pada_name, pada_text in pada_dictionary.items():
-                    st.write(f"**{pada_name}:** {pada_text}")
-            else:
-                st.warning("Please enter a valid verse to analyze.")
+            st.markdown("### 🧩 Structural Breakdown")
+            st.info(f"**Total Padas Identified:** {len(pada_dictionary)}")
+            
+            for pada_name, pada_text in pada_dictionary.items():
+                with st.container():
+                    st.markdown(f"#### {pada_name}")
+                    st.write(f"**Text:** {pada_text}")
+                    
+                    # Run the prosody engine
+                    syllables, pattern, chandas = get_prosody_details(pada_text)
+                    
+                    # Render the Laghu/Guru markings visually
+                    html_output = render_laghu_guru_html(syllables, pattern)
+                    st.markdown(html_output, unsafe_allow_html=True)
+                    
+                    # Display the Chandas
+                    st.caption(f"**Identified Meter:** {chandas}")
+                    st.markdown("<hr style='margin-top: 5px; margin-bottom: 15px;'>", unsafe_allow_html=True)
             
             st.markdown("### Clinical Understanding")
             st.write("Detailed explanation of the mechanism of Langhana in early stages of Jvara.")
@@ -446,38 +524,7 @@ def student_portal():
             content = st.text_area("Detailed Description")
             if st.button("Publish to Students"):
                 st.success(f"'{title}' has been published to the learning corner!")
-def student_portal():
-    st.title("📚 Student Learning Corner")
-    st.write("Welcome to the academic portal. Explore classical text analyses, clinical understandings, and new inventions.")
-    
-    tab1, tab2 = st.tabs(["Classical Text Analysis", "Clinical Inventions"])
-    
-    # --- TAB 1: VERSE ANALYSIS ---
-    with tab1:
-        st.subheader("Verse Breakdown & Prosody")
-        st.write("Analyze the structure and clinical meaning of classical verses.")
-        
-        verse_input = st.text_area("Enter Verse (Sloka)", "तत्र पूर्वं ज्वरे कुर्याल्लङ्घनं...")
-        
-        if st.button("Analyze Verse"):
-            st.markdown("### Structural Analysis")
-            st.success("Verse successfully parsed.")
-            st.write("**Pada 1:** तत्र पूर्वं ज्वरे कुर्याल्")
-            st.write("**Pada 2:** लङ्घनं...")
-            
-            st.markdown("### Clinical Understanding")
-            st.write("Detailed explanation of the mechanism of Langhana in early stages of Jvara.")
 
-    # --- TAB 2: INVENTIONS & OBSERVATIONS ---
-    with tab2:
-        st.subheader("New Clinical Inventions")
-        st.write("A space to document and share new formulations and clinical observations.")
-        
-        with st.expander("📝 Publish a new finding"):
-            title = st.text_input("Title of Invention/Observation")
-            content = st.text_area("Detailed Description")
-            if st.button("Publish to Students"):
-                st.success(f"'{title}' has been published to the learning corner!")
 
 # --- 3. MAIN NAVIGATION ---
 def main():
