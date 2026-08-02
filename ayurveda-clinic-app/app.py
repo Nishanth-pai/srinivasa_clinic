@@ -4,7 +4,9 @@ from firebase_admin import credentials, firestore
 import json
 import requests
 import pandas as pd
+import io
 from datetime import datetime
+
 
 # --- 1. FIREBASE INITIALIZATION ---
 if not firebase_admin._apps:
@@ -247,97 +249,143 @@ def consultant_portal():
 
         # --- TAB 3: CLINIC STATISTICS ---
         with tab3:
-            st.subheader("📊 Clinic Statistics")
+            st.subheader("📊 Clinic Statistics & Export")
             
-            # --- DATE FILTERS ---
-            st.markdown("### 📅 Select Date Range")
+            # --- FILTERS ---
+            st.markdown("### 📅 Select Parameters & Date Range")
             col_d1, col_d2 = st.columns(2)
-            # Default to showing the last 30 days
             start_date = col_d1.date_input("Start Date", value=pd.to_datetime("today") - pd.DateOffset(days=30))
             end_date = col_d2.date_input("End Date", value=pd.to_datetime("today"))
+            
+            # Multiselect for dynamic categories
+            available_params = ["Age", "Diagnosis", "Weight", "Pulse", "BP"]
+            selected_params = st.multiselect("Select categories to analyze:", available_params, default=["Age", "Diagnosis"])
             
             if st.button("Generate Dashboard"):
                 all_docs = db.collection("patients").stream()
                 
-                total_patients = 0
-                total_followups = 0
-                ages = []
-                diagnoses = []
-                followup_dates = []
-                
-                # Convert standard dates to strings to match Firestore format (YYYY-MM-DD)
                 start_str = start_date.strftime("%Y-%m-%d")
                 end_str = end_date.strftime("%Y-%m-%d")
                 
+                records = []
+                
                 for doc in all_docs:
                     data = doc.to_dict()
-                    
-                    # 1. Process Follow-ups within date range
-                    visits = data.get('visits', [])
-                    valid_visits = [v for v in visits if v.get('date') and start_str <= v.get('date') <= end_str]
-                    total_followups += len(valid_visits)
-                    
-                    for v in valid_visits:
-                        if v.get('diagnosis'):
-                            diagnoses.append(v.get('diagnosis').strip().title())
-                        if v.get('date'):
-                            followup_dates.append(v.get('date')[:7])
-                            
-                    # 2. Process First Visits within date range (Fallback to very old date for legacy data without a stamp)
                     reg_date = data.get('registration_date', "2020-01-01")
                     
-                    # A patient is included in this chart if they registered in the date range OR had a follow-up in the date range
-                    if (start_str <= reg_date <= end_str) or len(valid_visits) > 0:
-                        total_patients += 1
+                    # 1. Process First Visits
+                    if start_str <= reg_date <= end_str:
+                        records.append({
+                            "Date": reg_date,
+                            "Patient Name": data.get('name', 'Unknown'),
+                            "Age": data.get('age', 0),
+                            "Phone": data.get('phone', ''),
+                            "Diagnosis": data.get('diagnosis', '').strip().title(),
+                            "Weight (kg)": data.get('weight', 0.0),
+                            "Pulse (bpm)": data.get('pulse', 0),
+                            "BP": data.get('bp', ''),
+                            "Visit Type": "First Visit"
+                        })
                         
-                        if data.get('age'):
-                            ages.append(data.get('age'))
+                    # 2. Process Follow-ups
+                    for v in data.get('visits', []):
+                        v_date = v.get('date', '')
+                        if start_str <= v_date <= end_str:
+                            records.append({
+                                "Date": v_date,
+                                "Patient Name": data.get('name', 'Unknown'),
+                                "Age": data.get('age', 0),
+                                "Phone": data.get('phone', ''),
+                                "Diagnosis": v.get('diagnosis', '').strip().title(),
+                                "Weight (kg)": None, # Baseline vitals only
+                                "Pulse (bpm)": None, 
+                                "BP": None,
+                                "Visit Type": "Follow-up"
+                            })
                             
-                        # Only add their primary diagnosis if they actually registered in this date window
-                        if (start_str <= reg_date <= end_str) and data.get('diagnosis'):
-                            diagnoses.append(data.get('diagnosis').strip().title())
+                # Save the data to session state so it survives the download button refresh
+                st.session_state.export_df = pd.DataFrame(records)
+                st.session_state.show_stats = True
+
+            # --- DISPLAY RESULTS & EXPORT ---
+            if st.session_state.get("show_stats") and "export_df" in st.session_state:
+                df = st.session_state.export_df
                 
-                # --- High-Level Metrics ---
-                col1, col2, col3 = st.columns(3)
-                col1.metric("Patients in Range", total_patients)
-                col2.metric("Follow-ups in Range", total_followups)
-                col3.metric("Total Consultations", total_patients + total_followups)
-                
-                st.divider()
-                
-                # --- Charts ---
-                col_chart1, col_chart2 = st.columns(2)
-                
-                with col_chart1:
-                    st.markdown("**Age Distribution**")
-                    if ages:
-                        age_df = pd.DataFrame({'Age': ages})
+                if df.empty:
+                    st.warning("No records found for this date range.")
+                else:
+                    total_consultations = len(df)
+                    total_unique = df['Patient Name'].nunique()
+                    
+                    col1, col2 = st.columns(2)
+                    col1.metric("Total Consultations in Range", total_consultations)
+                    col2.metric("Unique Patients in Range", total_unique)
+                    
+                    st.divider()
+                    
+                    # --- DYNAMIC CHARTS ---
+                    if "Age" in selected_params:
+                        st.markdown("**Age Distribution**")
                         bins = [0, 10, 20, 30, 40, 50, 60, 70, 80, 100]
                         labels = ['0-10', '11-20', '21-30', '31-40', '41-50', '51-60', '61-70', '71-80', '80+']
-                        age_df['Age Group'] = pd.cut(age_df['Age'], bins=bins, labels=labels, right=False)
-                        age_counts = age_df['Age Group'].value_counts().sort_index()
-                        st.bar_chart(age_counts)
-                    else:
-                        st.info("No age data for this date range.")
+                        valid_ages = pd.to_numeric(df['Age'], errors='coerce').dropna()
+                        if not valid_ages.empty:
+                            age_groups = pd.cut(valid_ages, bins=bins, labels=labels, right=False).value_counts().sort_index()
+                            st.bar_chart(age_groups)
+                        else:
+                            st.info("No valid age data.")
+                            
+                    if "Diagnosis" in selected_params:
+                        st.markdown("**Most Common Diagnoses**")
+                        valid_diag = df['Diagnosis'].replace("", float("NaN")).dropna()
+                        if not valid_diag.empty:
+                            st.bar_chart(valid_diag.value_counts().head(10))
+                        else:
+                            st.info("No valid diagnosis data.")
+                            
+                    if "Weight" in selected_params:
+                        st.markdown("**Weight Overview (Baseline Registrations)**")
+                        valid_weights = pd.to_numeric(df['Weight (kg)'], errors='coerce').dropna()
+                        valid_weights = valid_weights[valid_weights > 0]
+                        if not valid_weights.empty:
+                            st.line_chart(valid_weights.reset_index(drop=True))
+                        else:
+                            st.info("No valid weight data in this range.")
+                            
+                    if "Pulse" in selected_params:
+                        st.markdown("**Pulse Overview (Baseline Registrations)**")
+                        valid_pulse = pd.to_numeric(df['Pulse (bpm)'], errors='coerce').dropna()
+                        valid_pulse = valid_pulse[valid_pulse > 0]
+                        if not valid_pulse.empty:
+                            st.line_chart(valid_pulse.reset_index(drop=True))
+                        else:
+                            st.info("No valid pulse data in this range.")
+                            
+                    if "BP" in selected_params:
+                        st.markdown("**Blood Pressure Log (Baseline Registrations)**")
+                        valid_bp = df[['Date', 'Patient Name', 'BP']].dropna(subset=['BP'])
+                        valid_bp = valid_bp[valid_bp['BP'] != ""]
+                        if not valid_bp.empty:
+                            st.dataframe(valid_bp, use_container_width=True)
+                        else:
+                            st.info("No BP data recorded in this range.")
+                            
+                    st.divider()
+                    
+                    # --- EXPORT TO EXCEL ---
+                    st.markdown("### 💾 Export Data")
+                    
+                    # Create the Excel file in memory
+                    buffer = io.BytesIO()
+                    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                        df.to_excel(writer, index=False, sheet_name='Clinic_Stats')
                         
-                with col_chart2:
-                    st.markdown("**Most Common Diagnoses**")
-                    if diagnoses:
-                        diag_df = pd.DataFrame({'Diagnosis': diagnoses})
-                        diag_counts = diag_df['Diagnosis'].value_counts().head(10) # Top 10
-                        st.bar_chart(diag_counts)
-                    else:
-                        st.info("No diagnosis data for this date range.")
-                
-                st.divider()
-                
-                st.markdown("**Follow-up Visits per Month**")
-                if followup_dates:
-                    date_df = pd.DataFrame({'Month': followup_dates})
-                    date_counts = date_df['Month'].value_counts().sort_index()
-                    st.line_chart(date_counts)
-                else:
-                    st.info("No follow-up date data for this range.")
+                    st.download_button(
+                        label="📥 Download Full Data as Excel (.xlsx)",
+                        data=buffer.getvalue(),
+                        file_name=f"Clinic_Stats_{start_date}_to_{end_date}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
 
 def student_portal():
     st.title("📚 Student Learning Corner")
