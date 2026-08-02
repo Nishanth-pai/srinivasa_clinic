@@ -79,6 +79,7 @@ def consultant_portal():
             st.rerun()
             
         # Add the third tab for Statistics
+   # Add the third tab for Statistics
         tab1, tab2, tab3 = st.tabs(["Add New Patient", "Search Database", "Clinic Statistics"])
         
         # --- TAB 1: REGISTRATION FORM ---
@@ -93,6 +94,16 @@ def consultant_portal():
                 
                 st.divider()
                 
+                # --- NEW VITALS SECTION ---
+                st.markdown("**Vitals**")
+                v1, v2, v3, v4 = st.columns(4)
+                bp = v1.text_input("BP (e.g. 120/80)")
+                weight = v2.number_input("Weight (kg)", min_value=0.0, step=0.1)
+                temp = v3.number_input("Temp (°F)", value=98.6, step=0.1)
+                pulse = v4.number_input("Pulse (bpm)", min_value=0, step=1)
+                
+                st.divider()
+                
                 chief_complaints = st.text_area("Chief Complaints")
                 co_morbidities = st.text_area("Co-morbidities")
                 examinations = st.text_area("Examinations")
@@ -103,34 +114,34 @@ def consultant_portal():
                 submitted = st.form_submit_button("Save Patient Record")
                 
                 if submitted:
+                    today_date = datetime.now().strftime("%Y-%m-%d")
                     patient_data = {
+                        "registration_date": today_date, # Date stamp for first visit stats
                         "name": name, "age": age, "phone": phone, "address": address,
+                        "bp": bp, "weight": weight, "temp": temp, "pulse": pulse,
                         "chief_complaints": chief_complaints, "co_morbidities": co_morbidities,
                         "examinations": examinations, "investigations": investigations,
                         "diagnosis": diagnosis, "prescription": prescription,
-                        "visits": [] # Initialize empty list for future follow-ups
+                        "visits": [] 
                     }
                     
                     db.collection("patients").add(patient_data)
                     st.success(f"Record for {name} saved successfully!")
                     
-        # --- TAB 2: SEARCH DATABASE (WITH AUTOCOMPLETE) ---
+        # --- TAB 2: SEARCH DATABASE ---
         with tab2:
             st.subheader("Search Patients")
             
-            # Fetch all patients to build the autocomplete list
             docs = db.collection("patients").stream()
             patient_dict = {}
-            options = [""] # Blank default option
+            options = [""]
             
             for doc in docs:
                 data = doc.to_dict()
-                # Create a clean label for the dropdown: "Name - Phone"
                 label = f"{data.get('name')} - {data.get('phone')}"
                 options.append(label)
                 patient_dict[label] = {"id": doc.id, "data": data}
             
-            # st.selectbox acts as an autocomplete dropdown
             selected_patient = st.selectbox("Type a name or phone number to search:", options)
             
             if selected_patient != "":
@@ -138,7 +149,7 @@ def consultant_portal():
                 data = patient_dict[selected_patient]["data"]
                 
                 with st.expander(f"🩺 {data.get('name')} - {data.get('phone')}", expanded=True):
-                    # --- 1. PATIENT SUMMARY ---
+                    
                     st.markdown("### 📋 Patient Summary")
                     visits = data.get('visits', [])
                     
@@ -154,12 +165,13 @@ def consultant_portal():
                     col_b.write(f"**Total Visits:** {len(visits) + 1}")
                     col_b.write(f"**Latest Diagnosis:** {latest_diagnosis}")
                     
+                    # Display the new vitals in the patient profile
+                    st.info(f"**Baseline Vitals:** BP: {data.get('bp', 'N/A')} | Weight: {data.get('weight', '0.0')}kg | Temp: {data.get('temp', '0.0')}°F | Pulse: {data.get('pulse', '0')}bpm")
+                    
                     st.divider()
                     
-                    # --- 2. VISIT HISTORY (COLLAPSIBLE) ---
                     st.markdown("### 🗓️ Visit History")
                     
-                    # Original / First Visit
                     with st.expander(f"First Visit - {data.get('diagnosis', 'No Diagnosis')}"):
                         st.write(f"**Complaints:** {data.get('chief_complaints')}")
                         st.write(f"**Diagnosis:** {data.get('diagnosis')}")
@@ -184,7 +196,6 @@ def consultant_portal():
                         """
                         st.download_button("🖨️ Print First Visit", data=html_first, file_name=f"{str(data.get('name'))}_FirstVisit.html", mime="text/html", key=f"print_orig_{doc_id}")
                     
-                    # Follow-up Visits
                     for idx, visit in enumerate(visits):
                         with st.expander(f"Follow-up: {visit.get('date')} - {visit.get('diagnosis')}"):
                             st.write(f"**Complaints:** {visit.get('complaints')}")
@@ -213,7 +224,6 @@ def consultant_portal():
 
                     st.divider()
                     
-                    # --- 3. REPEAT CONSULTATION FEATURE ---
                     with st.form(f"follow_up_{doc_id}"):
                         st.markdown("### 🔄 Add Follow-up Visit")
                         today_date = datetime.now().strftime("%Y-%m-%d")
@@ -239,6 +249,13 @@ def consultant_portal():
         with tab3:
             st.subheader("📊 Clinic Statistics")
             
+            # --- DATE FILTERS ---
+            st.markdown("### 📅 Select Date Range")
+            col_d1, col_d2 = st.columns(2)
+            # Default to showing the last 30 days
+            start_date = col_d1.date_input("Start Date", value=pd.to_datetime("today") - pd.DateOffset(days=30))
+            end_date = col_d2.date_input("End Date", value=pd.to_datetime("today"))
+            
             if st.button("Generate Dashboard"):
                 all_docs = db.collection("patients").stream()
                 
@@ -248,32 +265,42 @@ def consultant_portal():
                 diagnoses = []
                 followup_dates = []
                 
+                # Convert standard dates to strings to match Firestore format (YYYY-MM-DD)
+                start_str = start_date.strftime("%Y-%m-%d")
+                end_str = end_date.strftime("%Y-%m-%d")
+                
                 for doc in all_docs:
                     data = doc.to_dict()
-                    total_patients += 1
                     
-                    # Collect Age
-                    if data.get('age'):
-                        ages.append(data.get('age'))
-                        
-                    # Collect First Diagnosis
-                    if data.get('diagnosis'):
-                        diagnoses.append(data.get('diagnosis').strip().title())
-                        
-                    # Collect Follow-ups
+                    # 1. Process Follow-ups within date range
                     visits = data.get('visits', [])
-                    total_followups += len(visits)
-                    for v in visits:
+                    valid_visits = [v for v in visits if v.get('date') and start_str <= v.get('date') <= end_str]
+                    total_followups += len(valid_visits)
+                    
+                    for v in valid_visits:
                         if v.get('diagnosis'):
                             diagnoses.append(v.get('diagnosis').strip().title())
                         if v.get('date'):
-                            # Extract just the Year-Month for plotting (e.g. "2026-08")
                             followup_dates.append(v.get('date')[:7])
+                            
+                    # 2. Process First Visits within date range (Fallback to very old date for legacy data without a stamp)
+                    reg_date = data.get('registration_date', "2020-01-01")
+                    
+                    # A patient is included in this chart if they registered in the date range OR had a follow-up in the date range
+                    if (start_str <= reg_date <= end_str) or len(valid_visits) > 0:
+                        total_patients += 1
+                        
+                        if data.get('age'):
+                            ages.append(data.get('age'))
+                            
+                        # Only add their primary diagnosis if they actually registered in this date window
+                        if (start_str <= reg_date <= end_str) and data.get('diagnosis'):
+                            diagnoses.append(data.get('diagnosis').strip().title())
                 
                 # --- High-Level Metrics ---
                 col1, col2, col3 = st.columns(3)
-                col1.metric("Total Unique Patients", total_patients)
-                col2.metric("Total Follow-up Visits", total_followups)
+                col1.metric("Patients in Range", total_patients)
+                col2.metric("Follow-ups in Range", total_followups)
                 col3.metric("Total Consultations", total_patients + total_followups)
                 
                 st.divider()
@@ -284,7 +311,6 @@ def consultant_portal():
                 with col_chart1:
                     st.markdown("**Age Distribution**")
                     if ages:
-                        # Create bins for age groups (0-10, 11-20, etc.)
                         age_df = pd.DataFrame({'Age': ages})
                         bins = [0, 10, 20, 30, 40, 50, 60, 70, 80, 100]
                         labels = ['0-10', '11-20', '21-30', '31-40', '41-50', '51-60', '61-70', '71-80', '80+']
@@ -292,7 +318,7 @@ def consultant_portal():
                         age_counts = age_df['Age Group'].value_counts().sort_index()
                         st.bar_chart(age_counts)
                     else:
-                        st.info("Not enough age data yet.")
+                        st.info("No age data for this date range.")
                         
                 with col_chart2:
                     st.markdown("**Most Common Diagnoses**")
@@ -301,7 +327,7 @@ def consultant_portal():
                         diag_counts = diag_df['Diagnosis'].value_counts().head(10) # Top 10
                         st.bar_chart(diag_counts)
                     else:
-                        st.info("Not enough diagnosis data yet.")
+                        st.info("No diagnosis data for this date range.")
                 
                 st.divider()
                 
@@ -311,7 +337,7 @@ def consultant_portal():
                     date_counts = date_df['Month'].value_counts().sort_index()
                     st.line_chart(date_counts)
                 else:
-                    st.info("Not enough follow-up date data yet.")
+                    st.info("No follow-up date data for this range.")
 
 def student_portal():
     st.title("📚 Student Learning Corner")
