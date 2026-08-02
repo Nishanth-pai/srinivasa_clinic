@@ -514,32 +514,43 @@ def render_laghu_guru_html(syllables, pattern):
 
 def fetch_native_dictionary(word):
     """
-    Silently queries the modern Cologne digital database.
-    Updated to target the Sabda-kalpadruma (SKDScan) for Sanskrit definitions.
+    Queries the Sabda-kalpadruma. If the modern spelling fails, 
+    it applies classical Sanskrit orthography rules (doubling after repha) 
+    and tries again automatically.
     """
-    # Changed 'MWScan' to 'SKDScan' to fetch the Sabda-kalpadruma dictionary
-    url = f"https://www.sanskrit-lexicon.uni-koeln.de/scans/SKDScan/2020/web/webtc/getword.php?key={word}&input=deva&output=deva"
+    base_url = "https://www.sanskrit-lexicon.uni-koeln.de/scans/SKDScan/2020/web/webtc/getword.php?input=deva&output=deva&key="
     
-    try:
-        response = requests.get(url, timeout=8)
-        if response.status_code == 200:
-            soup = BeautifulSoup(response.text, 'html.parser')
-            raw_text = soup.get_text(separator=' ', strip=True)
-            
-            if "not found" in raw_text.lower() or "error" in raw_text.lower():
-                return None
+    def fetch_from_api(search_term):
+        try:
+            response = requests.get(base_url + search_term, timeout=8)
+            if response.status_code == 200:
+                soup = BeautifulSoup(response.text, 'html.parser')
+                raw_text = soup.get_text(separator=' ', strip=True)
+                if "not found" in raw_text.lower() or "error" in raw_text.lower():
+                    return None
                 
-            # Use regex to find and remove any pattern that looks like [ ID=12345 ]
-            clean_text = re.sub(r"\[\s*ID=\d+\s*\]", "", raw_text)
-            
-            # Clean up any double spaces
-            clean_text = clean_text.replace("  ", " ").strip()
-                
-            return clean_text
-        else:
+                # Scrub internal IDs
+                clean_text = re.sub(r"\[\s*ID=\d+\s*\]", "", raw_text)
+                return clean_text.replace("  ", " ").strip()
             return None
-    except Exception as e:
-        return None
+        except Exception:
+            return None
+
+    # 1. First attempt: Search exactly what the user typed
+    result = fetch_from_api(word)
+    
+    if result:
+        return result
+        
+    # 2. Second attempt: Apply classical Paninian doubling rules if the first search fails
+    # E.g., मूर्ति -> मूर्त्ति, कार्य -> कार्य्य, सर्व -> सर्व्व
+    classical_word = word.replace("र्त", "र्त्त").replace("र्ति", "र्त्ति").replace("र्य", "र्य्य").replace("र्व", "र्व्व")
+    
+    if classical_word != word:
+        # Silently try the search again with the classical spelling
+        return fetch_from_api(classical_word)
+        
+    return None
 
 # --- PORTAL FUNCTIONS ---
 
