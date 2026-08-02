@@ -574,7 +574,7 @@ def student_portal():
         st.write("Type a combined Sanskrit word to instantly analyze its components, roots (Dhatu), and cases (Vibhakti).")
         
         # Streamlit automatically updates the page as you type in this box
-        word_to_analyze = st.text_input("Enter a word to parse (e.g., जलदोषात्):")
+        word_to_analyze = st.text_input("Enter a word to parse (e.g., जलदोषात्, रामस्य, वृक्षे):").strip()
         
         if word_to_analyze:
             st.divider()
@@ -583,29 +583,77 @@ def student_portal():
             col_g1, col_g2 = st.columns(2)
             
             with col_g1:
-                st.markdown("**1. Padacheda (Word Splitting)**")
-                # Placeholder logic: we can replace this with your actual splitting algorithm
+                st.markdown("### ✂️ 1. Padacheda (Word Splitting)")
+                # A basic Sandhi splitting heuristic for common clinical terms
                 if "दोषात्" in word_to_analyze:
-                    st.info("जल + दोषात्")
+                    base_word = word_to_analyze.replace("दोषात्", "")
+                    st.info(f"**{base_word}** + **दोष** (with Panchami suffix)")
+                elif "स्य" in word_to_analyze and not word_to_analyze.endswith("स्य"):
+                    # Basic split for compound words containing 'sya'
+                    parts = word_to_analyze.split("स्य")
+                    st.info(f"**{parts[0]}** + **{parts[1]}**")
                 else:
-                    st.info(f"{word_to_analyze} (Base form)")
+                    st.info(f"**{word_to_analyze}** (Primary Base Form)")
                     
-                st.markdown("**2. Dhatu (Root) & Pratyaya**")
-                st.success("Awaiting root identification...") 
+                st.markdown("### 🌱 2. Dhatu (Root) & Pratyaya")
+                # Simple lookup for common clinical Dhatus
+                dhatu_dict = {
+                    "ज्वर": "ज्वर् (to be hot / to have fever)",
+                    "कुर्या": "कृ (to do / to make)",
+                    "लङ्घन": "लङ्घ् (to leap / to fast)",
+                    "दोष": "दुष् (to spoil / to be impure)",
+                    "वेद": "विद् (to know)"
+                }
+                
+                dhatu_found = False
+                for key, root in dhatu_dict.items():
+                    if key in word_to_analyze:
+                        st.success(f"**Root identified:** {root}")
+                        dhatu_found = True
+                        break
+                
+                if not dhatu_found:
+                    st.success("Awaiting root identification in local database...") 
                 
             with col_g2:
-                st.markdown("**3. Shabdaroopa (Noun Case / Vibhakti)**")
-                # Placeholder for Vibhakti matching
-                if word_to_analyze.endswith("त्"):
-                    st.warning("Panchami Vibhakti (Ablative Case), Ekavachana (Singular)")
-                elif word_to_analyze.endswith("म्"):
-                    st.warning("Dvitiya Vibhakti (Accusative Case), Ekavachana (Singular)")
+                st.markdown("### 🏷️ 3. Shabdaroopa (Noun Case / Vibhakti)")
+                # Rule-based Vibhakti identification based on suffixes
+                if word_to_analyze.endswith("त्") or word_to_analyze.endswith("त"):
+                    st.warning("**Panchami Vibhakti (Ablative Case)**\n\n*Meaning:* 'From' or 'Because of' (e.g., Because of the Dosha)")
+                elif word_to_analyze.endswith("स्य"):
+                    st.warning("**Shashti Vibhakti (Genitive Case)**\n\n*Meaning:* 'Of' or 'Belonging to' (e.g., Of the Dosha)")
+                elif word_to_analyze.endswith("म्") or word_to_analyze.endswith("ं"):
+                    st.warning("**Dvitiya Vibhakti (Accusative Case)**\n\n*Meaning:* Object of the action (e.g., To the Dosha)")
+                elif word_to_analyze.endswith("े"):
+                    st.warning("**Saptami Vibhakti (Locative Case)**\n\n*Meaning:* 'In', 'On', or 'At' (e.g., In the fever)")
+                elif word_to_analyze.endswith("ेन"):
+                    st.warning("**Tritiya Vibhakti (Instrumental Case)**\n\n*Meaning:* 'By' or 'With' (e.g., With the Dosha)")
+                elif word_to_analyze.endswith("ाय"):
+                    st.warning("**Chaturthi Vibhakti (Dative Case)**\n\n*Meaning:* 'For' (e.g., For the Dosha)")
                 else:
-                    st.warning("Vibhakti parsing...")
+                    st.warning("**Prathama Vibhakti (Nominative Case) / Unidentified**\n\n*Meaning:* Subject of the sentence")
                 
-                st.markdown("**4. Amarakosha Reference**")
-                # This is where your Firebase dictionary connection will eventually go
-                st.error("Database connection ready for Amarakosha definitions.")
+                st.markdown("### 📖 4. Amarakosha Reference")
+                # Connects to your Firebase database to search for synonyms
+                try:
+                    # Strip standard suffixes to search the root noun in Firebase
+                    search_term = word_to_analyze.replace("ात्", "").replace("स्य", "").replace("म्", "").replace("े", "")
+                    
+                    # Query Firebase collection named 'amarakosha'
+                    amarakosha_ref = db.collection("amarakosha").where("word", "==", search_term).stream()
+                    
+                    found_in_db = False
+                    for doc in amarakosha_ref:
+                        data = doc.to_dict()
+                        st.error(f"**Synonyms (Paryaya):** {data.get('synonyms', 'None listed')}")
+                        st.error(f"**Category (Varga):** {data.get('varga', 'Unknown')}")
+                        found_in_db = True
+                        
+                    if not found_in_db:
+                        st.error(f"No entry found in cloud dictionary for root: **{search_term}**")
+                        
+                except Exception as e:
+                    st.error("Database connection ready. Add an 'amarakosha' collection to your Firebase to enable live lookups.")
 
     # --- 3. MAIN NAVIGATION ---
 def main():
