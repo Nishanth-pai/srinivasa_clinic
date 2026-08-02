@@ -545,16 +545,21 @@ def student_portal():
                 # This is where your Firebase dictionary connection will eventually go
                 st.error("Database connection ready for Amarakosha definitions.")
 
-    # --- TAB 3: INVENTIONS & OBSERVATIONS ---
-    with tab3:
-        st.subheader("New Clinical Inventions")
-        st.write("A space to document and share new formulations and clinical observations.")
-        
-        with st.expander("📝 Publish a new finding"):
-            title = st.text_input("Title of Invention/Observation")
-            content = st.text_area("Detailed Description")
-            if st.button("Publish to Students"):
-                st.success(f"'{title}' has been published to the learning corner!")
+    # --- 3. MAIN NAVIGATION ---
+def main():
+    # If you already have st.set_page_config at the very top of your file, you can remove this next line to avoid a duplicate error. Otherwise, keep it here.
+    st.set_page_config(page_title="Ayurveda Clinic Portal", layout="wide") 
+    
+    st.sidebar.title("Navigation")
+    menu = ["Home & Booking", "Consultant Login", "Student Corner"]
+    choice = st.sidebar.radio("Go to:", menu)
+
+    if choice == "Home & Booking":
+        home_page()
+    elif choice == "Consultant Login":
+        consultant_portal()
+    elif choice == "Student Corner":
+        student_portal()
 
 if __name__ == '__main__':
     main()
