@@ -515,13 +515,11 @@ def render_laghu_guru_html(syllables, pattern):
 def fetch_native_dictionary(word):
     """
     Silently queries the modern Cologne digital database (Monier-Williams)
-    and extracts the raw text to display natively in the app.
+    and extracts the raw text, scrubbing out internal database ID tags.
     """
-    # Updated to the 2020 endpoint which correctly respects the 'input=deva' command
     url = f"https://www.sanskrit-lexicon.uni-koeln.de/scans/MWScan/2020/web/webtc/getword.php?key={word}&input=deva&output=deva"
     
     try:
-        # Increased timeout slightly just in case the Cologne server is slow
         response = requests.get(url, timeout=8)
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, 'html.parser')
@@ -531,7 +529,13 @@ def fetch_native_dictionary(word):
             if "not found" in raw_text.lower() or "error" in raw_text.lower():
                 return None
                 
-            return raw_text
+            # Use regex to find and remove any pattern that looks like [ ID=12345 ]
+            clean_text = re.sub(r"\[\s*ID=\d+\s*\]", "", raw_text)
+            
+            # Clean up any double spaces that might have been left behind after deletion
+            clean_text = clean_text.replace("  ", " ").strip()
+                
+            return clean_text
         else:
             return None
     except Exception as e:
