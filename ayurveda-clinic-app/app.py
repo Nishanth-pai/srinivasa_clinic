@@ -514,10 +514,11 @@ def render_laghu_guru_html(syllables, pattern):
 
 def fetch_native_dictionary(word):
     """
-    Silently queries the modern Cologne digital database (Monier-Williams)
-    and extracts the raw text, scrubbing out internal database ID tags.
+    Silently queries the modern Cologne digital database.
+    Updated to target the Sabda-kalpadruma (SKDScan) for Sanskrit definitions.
     """
-    url = f"https://www.sanskrit-lexicon.uni-koeln.de/scans/MWScan/2020/web/webtc/getword.php?key={word}&input=deva&output=deva"
+    # Changed 'MWScan' to 'SKDScan' to fetch the Sabda-kalpadruma dictionary
+    url = f"https://www.sanskrit-lexicon.uni-koeln.de/scans/SKDScan/2020/web/webtc/getword.php?key={word}&input=deva&output=deva"
     
     try:
         response = requests.get(url, timeout=8)
@@ -525,14 +526,13 @@ def fetch_native_dictionary(word):
             soup = BeautifulSoup(response.text, 'html.parser')
             raw_text = soup.get_text(separator=' ', strip=True)
             
-            # Check for their specific error messages
             if "not found" in raw_text.lower() or "error" in raw_text.lower():
                 return None
                 
             # Use regex to find and remove any pattern that looks like [ ID=12345 ]
             clean_text = re.sub(r"\[\s*ID=\d+\s*\]", "", raw_text)
             
-            # Clean up any double spaces that might have been left behind after deletion
+            # Clean up any double spaces
             clean_text = clean_text.replace("  ", " ").strip()
                 
             return clean_text
