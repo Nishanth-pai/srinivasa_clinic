@@ -514,18 +514,23 @@ def render_laghu_guru_html(syllables, pattern):
 
 def fetch_native_dictionary(word):
     """
-    Silently queries the Cologne digital database (Monier-Williams/Shabdakalpadruma)
+    Silently queries the modern Cologne digital database (Monier-Williams)
     and extracts the raw text to display natively in the app.
     """
-    url = f"https://www.sanskrit-lexicon.uni-koeln.de/cgi-bin/monier/webtc/getword.php?key={word}&dict=mw&input=deva&output=deva"
+    # Updated to the 2020 endpoint which correctly respects the 'input=deva' command
+    url = f"https://www.sanskrit-lexicon.uni-koeln.de/scans/MWScan/2020/web/webtc/getword.php?key={word}&input=deva&output=deva"
     
     try:
-        response = requests.get(url, timeout=5)
+        # Increased timeout slightly just in case the Cologne server is slow
+        response = requests.get(url, timeout=8)
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, 'html.parser')
             raw_text = soup.get_text(separator=' ', strip=True)
-            if "not found" in raw_text.lower():
+            
+            # Check for their specific error messages
+            if "not found" in raw_text.lower() or "error" in raw_text.lower():
                 return None
+                
             return raw_text
         else:
             return None
