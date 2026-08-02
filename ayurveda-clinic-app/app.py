@@ -28,7 +28,7 @@ if not firebase_admin._apps:
 
 # 6. Connect to the database (this stays OUTSIDE the if statement)
 db = firestore.client()
-    else:
+else:
         # Running locally on your Mac, use the physical file
         cred = credentials.Certificate('firebase_key.json')
     
