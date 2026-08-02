@@ -513,6 +513,7 @@ def render_laghu_guru_html(syllables, pattern):
     return html
 # ... (your existing get_prosody_details and render_laghu_guru_html functions are here) ...
 
+@st.cache_data(show_spinner=False, ttl=86400)
 def fetch_native_dictionary(word):
     """
     Diagnostic dictionary engine.
