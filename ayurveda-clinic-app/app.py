@@ -6,6 +6,7 @@ import requests
 import pandas as pd
 import io
 from datetime import datetime
+import re
 
 
 # --- 1. FIREBASE INITIALIZATION ---
@@ -386,7 +387,65 @@ def consultant_portal():
                         file_name=f"Clinic_Stats_{start_date}_to_{end_date}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     )
+def split_into_padas(verse_text):
+    """
+    Cleans and splits a Sanskrit verse into its constituent padas.
+    Handles traditional dandas (।, ॥) and standard line breaks.
+    """
+    # Replace double dandas and line breaks with a single danda for uniform splitting
+    normalized_text = verse_text.replace("॥", "।").replace("\n", "।")
+    
+    # Split the text at the single danda and remove any extra whitespace
+    raw_padas = [p.strip() for p in normalized_text.split("।") if p.strip()]
+    
+    # Organize into a dictionary format
+    structured_padas = {}
+    for i, pada in enumerate(raw_padas):
+        structured_padas[f"Pada {i+1}"] = pada
+        
+    return structured_padas
 
+def student_portal():
+    st.title("📚 Student Learning Corner")
+    st.write("Welcome to the academic portal. Explore classical text analyses, clinical understandings, and new inventions.")
+    
+    tab1, tab2 = st.tabs(["Classical Text Analysis", "Clinical Inventions"])
+    
+    # --- TAB 1: VERSE ANALYSIS ---
+    with tab1:
+        st.subheader("Verse Breakdown & Prosody")
+        st.write("Analyze the structure and clinical meaning of classical verses.")
+        
+        # We updated the default text slightly to include dandas for a clear demo
+        verse_input = st.text_area("Enter Verse (Sloka)", "तत्र पूर्वं ज्वरे कुर्याल् । लङ्घनं जलदोषात् ॥")
+        
+        if st.button("Analyze Verse"):
+            st.markdown("### Structural Analysis")
+            
+            # Run the dynamic parsing function on the user's input
+            pada_dictionary = split_into_padas(verse_input)
+            
+            if pada_dictionary:
+                st.success("Verse successfully parsed.")
+                # Dynamically print out each pada exactly as it was split
+                for pada_name, pada_text in pada_dictionary.items():
+                    st.write(f"**{pada_name}:** {pada_text}")
+            else:
+                st.warning("Please enter a valid verse to analyze.")
+            
+            st.markdown("### Clinical Understanding")
+            st.write("Detailed explanation of the mechanism of Langhana in early stages of Jvara.")
+
+    # --- TAB 2: INVENTIONS & OBSERVATIONS ---
+    with tab2:
+        st.subheader("New Clinical Inventions")
+        st.write("A space to document and share new formulations and clinical observations.")
+        
+        with st.expander("📝 Publish a new finding"):
+            title = st.text_input("Title of Invention/Observation")
+            content = st.text_area("Detailed Description")
+            if st.button("Publish to Students"):
+                st.success(f"'{title}' has been published to the learning corner!")
 def student_portal():
     st.title("📚 Student Learning Corner")
     st.write("Welcome to the academic portal. Explore classical text analyses, clinical understandings, and new inventions.")
