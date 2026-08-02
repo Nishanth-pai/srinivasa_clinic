@@ -520,12 +520,21 @@ def fetch_native_dictionary(word):
     """
     base_url = "https://www.sanskrit-lexicon.uni-koeln.de/scans/SKDScan/2020/web/webtc/getword.php?input=deva&output=deva&key="
     
+    def fetch_native_dictionary(word):
+    """
+    Queries the Sabda-kalpadruma. Automatically tests modern spellings, 
+    classical Paninian consonant doubling, and traditional dictionary 
+    case endings (visarga/anusvara) to guarantee a match.
+    """
+    base_url = "https://www.sanskrit-lexicon.uni-koeln.de/scans/SKDScan/2020/web/webtc/getword.php?input=deva&output=deva&key="
+    
     def fetch_from_api(search_term):
         try:
             response = requests.get(base_url + search_term, timeout=8)
             if response.status_code == 200:
                 soup = BeautifulSoup(response.text, 'html.parser')
                 raw_text = soup.get_text(separator=' ', strip=True)
+                
                 if "not found" in raw_text.lower() or "error" in raw_text.lower():
                     return None
                 
@@ -536,20 +545,30 @@ def fetch_native_dictionary(word):
         except Exception:
             return None
 
-    # 1. First attempt: Search exactly what the user typed
-    result = fetch_from_api(word)
+    # Apply classical Paninian doubling rules (e.g., मूर्ति -> मूर्त्ति)
+    classical_base = word.replace("र्त", "र्त्त").replace("र्ति", "र्त्ति").replace("र्य", "र्य्य").replace("र्व", "र्व्व")
     
-    if result:
-        return result
-        
-    # 2. Second attempt: Apply classical Paninian doubling rules if the first search fails
-    # E.g., मूर्ति -> मूर्त्ति, कार्य -> कार्य्य, सर्व -> सर्व्व
-    classical_word = word.replace("र्त", "र्त्त").replace("र्ति", "र्त्ति").replace("र्य", "र्य्य").replace("र्व", "र्व्व")
+    # Create a list of every possible dictionary indexing format
+    search_variations = [
+        word,                      # 1. Exact input (मूर्ति)
+        f"{word}ः",                # 2. Input + Visarga (मूर्तिः)
+        f"{word}म्",               # 3. Input + Neuter 'm' (मूर्तिम्)
+        f"{word}ं",                # 4. Input + Anusvara (मूर्तिं)
+        classical_base,            # 5. Doubled consonants (मूर्त्ति)
+        f"{classical_base}ः",      # 6. Doubled + Visarga (मूर्त्तिः) <-- This is the SKD winner!
+        f"{classical_base}म्",     # 7. Doubled + Neuter 'm' (मूर्त्तिम्)
+        f"{classical_base}ं"       # 8. Doubled + Anusvara (मूर्त्तं)
+    ]
     
-    if classical_word != word:
-        # Silently try the search again with the classical spelling
-        return fetch_from_api(classical_word)
-        
+    # Remove any duplicates to keep the engine fast
+    search_variations = list(dict.fromkeys(search_variations))
+    
+    # Silently test variations in the background until the database returns a match
+    for variant in search_variations:
+        result = fetch_from_api(variant)
+        if result:
+            return f"*(Found under classical dictionary spelling: **{variant}**)*\n\n{result}"
+            
     return None
 
 # --- PORTAL FUNCTIONS ---
