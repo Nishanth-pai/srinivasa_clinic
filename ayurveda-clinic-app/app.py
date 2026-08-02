@@ -633,27 +633,36 @@ def student_portal():
                 else:
                     st.warning("**Prathama Vibhakti (Nominative Case) / Unidentified**\n\n*Meaning:* Subject of the sentence")
                 
-                st.markdown("### 📖 4. Amarakosha Reference")
-                # Connects to your Firebase database to search for synonyms
-                try:
-                    # Strip standard suffixes to search the root noun in Firebase
-                    search_term = word_to_analyze.replace("ात्", "").replace("स्य", "").replace("म्", "").replace("े", "")
-                    
-                    # Query Firebase collection named 'amarakosha'
-                    amarakosha_ref = db.collection("amarakosha").where("word", "==", search_term).stream()
-                    
-                    found_in_db = False
-                    for doc in amarakosha_ref:
-                        data = doc.to_dict()
-                        st.error(f"**Synonyms (Paryaya):** {data.get('synonyms', 'None listed')}")
-                        st.error(f"**Category (Varga):** {data.get('varga', 'Unknown')}")
-                        found_in_db = True
-                        
-                    if not found_in_db:
-                        st.error(f"No entry found in cloud dictionary for root: **{search_term}**")
-                        
-                except Exception as e:
-                    st.error("Database connection ready. Add an 'amarakosha' collection to your Firebase to enable live lookups.")
+                st.markdown("### 📖 4. Shabdakalpadruma Integration")
+                
+                # Strip standard suffixes to isolate the root word for searching
+                search_term = word_to_analyze.replace("ात्", "").replace("स्य", "").replace("म्", "").replace("े", "").replace("ेन", "").replace("ाय", "")
+                
+                st.info("Access detailed Dhatu (root) derivations, grammar rules, and classical meanings directly from the University of Cologne Digital Sanskrit Lexicon.")
+                
+                # Generate a dynamic URL specifically formatted for the Cologne Lexicon's Devanagari search parameters
+                cologne_url = f"https://www.sanskrit-lexicon.uni-koeln.de/scans/SKDScan/2020/web/webtc/indexcaller.php?key={search_term}&input=deva&output=deva"
+                
+                # Display a clickable smart-link button using Markdown
+                st.markdown(f"**[🔗 Click here to search for '{search_term}' in the Shabdakalpadruma Dictionary]({cologne_url})**")
+                
+                st.markdown("<hr style='margin-top: 15px; margin-bottom: 15px;'>", unsafe_allow_html=True)
+                
+                # Keep the Firebase local dictionary as a secondary option for your custom clinical notes
+                with st.expander("View Local Firebase Amarakosha Notes"):
+                    try:
+                        amarakosha_ref = db.collection("amarakosha").where("word", "==", search_term).stream()
+                        found_in_db = False
+                        for doc in amarakosha_ref:
+                            data = doc.to_dict()
+                            st.write(f"**Synonyms (Paryaya):** {data.get('synonyms', 'None listed')}")
+                            st.write(f"**Category (Varga):** {data.get('varga', 'Unknown')}")
+                            found_in_db = True
+                            
+                        if not found_in_db:
+                            st.caption(f"No entry found in local cloud dictionary for root: **{search_term}**")
+                    except Exception as e:
+                        st.caption("Database connection ready. Add an 'amarakosha' collection to Firebase to enable local notes.")
 
     # --- 3. MAIN NAVIGATION ---
 def main():
