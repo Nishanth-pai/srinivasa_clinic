@@ -468,11 +468,12 @@ def render_laghu_guru_html(syllables, pattern):
 
 def student_portal():
     st.title("📚 Student Learning Corner")
-    st.write("Welcome to the academic portal. Explore classical text analyses, clinical understandings, and new inventions.")
+    st.write("Welcome to the academic portal. Explore classical text analyses, grammar breakdowns, and clinical inventions.")
     
-    tab1, tab2 = st.tabs(["Classical Text Analysis", "Clinical Inventions"])
+    # Added a third tab for the Grammar Sandbox
+    tab1, tab2, tab3 = st.tabs(["Classical Text Analysis", "Real-Time Grammar", "Clinical Inventions"])
     
-    # --- TAB 1: VERSE ANALYSIS ---
+    # --- TAB 1: VERSE ANALYSIS (PROSODY) ---
     with tab1:
         st.subheader("Verse Breakdown & Prosody")
         st.write("Analyze the structure, meter (Chandas), and clinical meaning of classical verses.")
@@ -484,7 +485,6 @@ def student_portal():
         if st.button("Analyze Verse") and verse_input:
             st.divider()
             
-            # Prioritize the Padacheda (split text) if the user provides it
             text_to_process = split_input if split_input.strip() else verse_input
             pada_dictionary = split_into_padas(text_to_process)
             
@@ -496,22 +496,57 @@ def student_portal():
                     st.markdown(f"#### {pada_name}")
                     st.write(f"**Text:** {pada_text}")
                     
-                    # Run the prosody engine
                     syllables, pattern, chandas = get_prosody_details(pada_text)
-                    
-                    # Render the Laghu/Guru markings visually
                     html_output = render_laghu_guru_html(syllables, pattern)
                     st.markdown(html_output, unsafe_allow_html=True)
                     
-                    # Display the Chandas
                     st.caption(f"**Identified Meter:** {chandas}")
                     st.markdown("<hr style='margin-top: 5px; margin-bottom: 15px;'>", unsafe_allow_html=True)
             
             st.markdown("### Clinical Understanding")
             st.write("Detailed explanation of the mechanism of Langhana in early stages of Jvara.")
 
-    # --- TAB 2: INVENTIONS & OBSERVATIONS ---
+    # --- TAB 2: REAL-TIME GRAMMAR ANALYSIS ---
     with tab2:
+        st.subheader("🔍 Real-Time Grammar & Sandhi Sandbox")
+        st.write("Type a combined Sanskrit word to instantly analyze its components, roots (Dhatu), and cases (Vibhakti).")
+        
+        # Streamlit automatically updates the page as you type in this box
+        word_to_analyze = st.text_input("Enter a word to parse (e.g., जलदोषात्):")
+        
+        if word_to_analyze:
+            st.divider()
+            st.markdown(f"### Live Analysis: **{word_to_analyze}**")
+            
+            col_g1, col_g2 = st.columns(2)
+            
+            with col_g1:
+                st.markdown("**1. Padacheda (Word Splitting)**")
+                # Placeholder logic: we can replace this with your actual splitting algorithm
+                if "दोषात्" in word_to_analyze:
+                    st.info("जल + दोषात्")
+                else:
+                    st.info(f"{word_to_analyze} (Base form)")
+                    
+                st.markdown("**2. Dhatu (Root) & Pratyaya**")
+                st.success("Awaiting root identification...") 
+                
+            with col_g2:
+                st.markdown("**3. Shabdaroopa (Noun Case / Vibhakti)**")
+                # Placeholder for Vibhakti matching
+                if word_to_analyze.endswith("त्"):
+                    st.warning("Panchami Vibhakti (Ablative Case), Ekavachana (Singular)")
+                elif word_to_analyze.endswith("म्"):
+                    st.warning("Dvitiya Vibhakti (Accusative Case), Ekavachana (Singular)")
+                else:
+                    st.warning("Vibhakti parsing...")
+                
+                st.markdown("**4. Amarakosha Reference**")
+                # This is where your Firebase dictionary connection will eventually go
+                st.error("Database connection ready for Amarakosha definitions.")
+
+    # --- TAB 3: INVENTIONS & OBSERVATIONS ---
+    with tab3:
         st.subheader("New Clinical Inventions")
         st.write("A space to document and share new formulations and clinical observations.")
         
@@ -520,22 +555,6 @@ def student_portal():
             content = st.text_area("Detailed Description")
             if st.button("Publish to Students"):
                 st.success(f"'{title}' has been published to the learning corner!")
-
-
-# --- 3. MAIN NAVIGATION ---
-def main():
-    st.set_page_config(page_title="Ayurveda Clinic Portal", layout="wide")
-    
-    st.sidebar.title("Navigation")
-    menu = ["Home & Booking", "Consultant Login", "Student Corner"]
-    choice = st.sidebar.radio("Go to:", menu)
-
-    if choice == "Home & Booking":
-        home_page()
-    elif choice == "Consultant Login":
-        consultant_portal()
-    elif choice == "Student Corner":
-        student_portal()
 
 if __name__ == '__main__':
     main()
