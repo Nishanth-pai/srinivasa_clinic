@@ -3,6 +3,7 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 import json
 import requests
+from bs4 import BeautifulSoup
 import pandas as pd
 import io
 from datetime import datetime
@@ -509,6 +510,33 @@ def render_laghu_guru_html(syllables, pattern):
         
     html += "</div>"
     return html
+# ... (your existing get_prosody_details and render_laghu_guru_html functions are here) ...
+
+def fetch_native_dictionary(word):
+    """
+    Silently queries the Cologne digital database (Monier-Williams/Shabdakalpadruma)
+    and extracts the raw text to display natively in the app.
+    """
+    url = f"https://www.sanskrit-lexicon.uni-koeln.de/cgi-bin/monier/webtc/getword.php?key={word}&dict=mw&input=deva&output=deva"
+    
+    try:
+        response = requests.get(url, timeout=5)
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.text, 'html.parser')
+            raw_text = soup.get_text(separator=' ', strip=True)
+            if "not found" in raw_text.lower():
+                return None
+            return raw_text
+        else:
+            return None
+    except Exception as e:
+        return None
+
+# --- PORTAL FUNCTIONS ---
+
+def student_portal():
+    st.title("📚 Student Learning Corner")
+    # ... (the rest of your student portal code continues below) ...
 
 def student_portal():
     st.title("📚 Student Learning Corner")
@@ -633,22 +661,28 @@ def student_portal():
                 else:
                     st.warning("**Prathama Vibhakti (Nominative Case) / Unidentified**\n\n*Meaning:* Subject of the sentence")
                 
-                st.markdown("### 📖 4. Shabdakalpadruma Integration")
+                st.markdown("### 📖 4. Integrated Sanskrit Dictionary")
                 
-                # Strip standard suffixes to isolate the root word for searching
                 search_term = word_to_analyze.replace("ात्", "").replace("स्य", "").replace("म्", "").replace("े", "").replace("ेन", "").replace("ाय", "")
                 
-                st.info("Access detailed Dhatu (root) derivations, grammar rules, and classical meanings directly from the University of Cologne Digital Sanskrit Lexicon.")
+                st.info(f"Fetching classical definition for root: **{search_term}**")
                 
-                # Generate a dynamic URL specifically formatted for the Cologne Lexicon's Devanagari search parameters
-                cologne_url = f"https://www.sanskrit-lexicon.uni-koeln.de/scans/SKDScan/2020/web/webtc/indexcaller.php?key={search_term}&input=deva&output=deva"
+                # Call our new Python scraper instead of opening a link
+                dictionary_result = fetch_native_dictionary(search_term)
                 
-                # Display a clickable smart-link button using Markdown
-                st.markdown(f"**[🔗 Click here to search for '{search_term}' in the Shabdakalpadruma Dictionary]({cologne_url})**")
-                
+                if dictionary_result:
+                    # Display it cleanly in a nice UI box
+                    st.success("**Definition Found:**")
+                    st.write(dictionary_result)
+                    
+                    # Option to save it to your own database
+                    if st.button("Save to My Clinical Dictionary"):
+                        st.write("*(Ready to push to Firebase Amarakosha database)*")
+                else:
+                    st.error(f"No definition found for '{search_term}'.")
+                    
                 st.markdown("<hr style='margin-top: 15px; margin-bottom: 15px;'>", unsafe_allow_html=True)
                 
-                # Keep the Firebase local dictionary as a secondary option for your custom clinical notes
                 with st.expander("View Local Firebase Amarakosha Notes"):
                     try:
                         amarakosha_ref = db.collection("amarakosha").where("word", "==", search_term).stream()
