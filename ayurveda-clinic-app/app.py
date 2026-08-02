@@ -461,12 +461,8 @@ def render_laghu_guru_html(syllables, pattern):
     html = "<div style='display: flex; flex-wrap: wrap; margin-bottom: 15px;'>"
     for syl, mark in zip(syllables, pattern):
         color = "#e74c3c" if mark == 'S' else "#3498db"
-        html += f'''
-            <div style='display: flex; flex-direction: column; align-items: center; margin-right: 8px; font-family: sans-serif;'>
-                <span style='font-size: 16px; font-weight: bold; color: {color};'>{mark}</span>
-                <span style='font-size: 22px; color: #2c3e50;'>{syl}</span>
-            </div>
-        '''
+        # We removed the formatting spaces here so Streamlit doesn't think it is a Markdown code block
+        html += f"<div style='display: flex; flex-direction: column; align-items: center; margin-right: 8px; font-family: sans-serif;'><span style='font-size: 16px; font-weight: bold; color: {color};'>{mark}</span><span style='font-size: 22px; color: #2c3e50;'>{syl}</span></div>"
     html += "</div>"
     return html
 
