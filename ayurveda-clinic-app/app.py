@@ -513,10 +513,11 @@ def render_laghu_guru_html(syllables, pattern):
     return html
 # ... (your existing get_prosody_details and render_laghu_guru_html functions are here) ...
 
-@st.cache_data(show_spinner=False, ttl=86400) # Memorizes results for 24 hours
 def fetch_native_dictionary(word):
     """
-    Advanced dual-dictionary query engine with rate-limiting and caching.
+    Diagnostic dictionary engine.
+    This version removes the cache to force live network requests and 
+    will print the exact server error to your screen if it fails.
     """
     raw_word = word.strip()
     
@@ -538,7 +539,14 @@ def fetch_native_dictionary(word):
     def fetch_from_api(search_term, dict_code="SKDScan"):
         url = f"https://www.sanskrit-lexicon.uni-koeln.de/scans/{dict_code}/2020/web/webtc/getword.php?input=deva&output=deva&key={search_term}"
         try:
-            response = requests.get(url, timeout=8)
+            # We add headers to pretend we are a normal web browser, not a Python bot
+            headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'}
+            response = requests.get(url, headers=headers, timeout=8)
+            
+            # Diagnostic Check: Did the server block us?
+            if response.status_code == 403:
+                return "SERVER_BLOCKED"
+                
             if response.status_code == 200:
                 soup = BeautifulSoup(response.text, 'html.parser')
                 raw_text = soup.get_text(separator=' ', strip=True)
@@ -546,9 +554,44 @@ def fetch_native_dictionary(word):
                     return None
                 clean_text = re.sub(r"\[\s*ID=\d+\s*\]", "", raw_text)
                 return clean_text.replace("  ", " ").strip()
-            return None
-        except Exception:
-            return None
+                
+            return f"HTTP_ERROR_{response.status_code}"
+            
+        except requests.exceptions.Timeout:
+            return "TIMEOUT"
+        except Exception as e:
+            return f"CODE_ERROR"
+
+    # PHASE 1: Query Sabda-kalpadruma
+    for variant in search_variations:
+        result = fetch_from_api(variant, "SKDScan")
+        
+        # Catch explicit errors from the server
+        if result == "SERVER_BLOCKED":
+            return "⚠️ **Connection Blocked:** The Cologne database is currently rejecting requests from Streamlit Cloud due to rate-limiting. Please try again in a few hours."
+        elif result in ["TIMEOUT", "CODE_ERROR"] or str(result).startswith("HTTP_ERROR"):
+            return f"⚠️ **Network Issue:** The server returned an error ({result})."
+            
+        if result:
+            prefix = "" if variant == raw_word else f"*(Found in Sabda-kalpadruma as: **{variant}**)*\n\n"
+            return prefix + result
+            
+        time.sleep(0.3)
+            
+    # PHASE 2: Fallback to Monier-Williams
+    for variant in [base_stem, raw_word]:
+        result = fetch_from_api(variant, "MWScan")
+        
+        if result == "SERVER_BLOCKED":
+            return "⚠️ **Connection Blocked:** The Cologne database is currently rejecting requests from Streamlit Cloud."
+            
+        if result:
+            prefix = f"*(Word not in Sabda-kalpadruma. Found in Monier-Williams as: **{variant}**)*\n\n"
+            return prefix + result
+            
+        time.sleep(0.3)
+            
+    return None
 
     # PHASE 1: Query Sabda-kalpadruma
     for variant in search_variations:
