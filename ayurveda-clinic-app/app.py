@@ -517,7 +517,26 @@ def student_portal():
                     st.markdown("<hr style='margin-top: 5px; margin-bottom: 15px;'>", unsafe_allow_html=True)
             
             st.markdown("### Clinical Understanding")
-            st.write("Detailed explanation of the mechanism of Langhana in early stages of Jvara.")
+            st.markdown("### Clinical Understanding")
+            
+            # A mini-dictionary to hold your verse meanings
+            known_verses = {
+                "तत्र पूर्वं ज्वरे": "Detailed explanation of the mechanism of Langhana in early stages of Jvara.",
+                "तस्यायुषः पुण्यतमो": "Explanation of the most sacred Veda (Ayurveda) for those seeking longevity.",
+                # You can easily add more verses and meanings here in the future!
+            }
+            
+            # Check if any of our known verse snippets are inside the text the user pasted
+            meaning_found = False
+            for snippet, meaning in known_verses.items():
+                if snippet in text_to_process:
+                    st.write(meaning)
+                    meaning_found = True
+                    break # Stop searching once we find a match
+            
+            # If the verse isn't in our dictionary, show a default message
+            if not meaning_found:
+                st.info("The clinical meaning for this specific verse has not been added to the local database yet.")
 
     # --- TAB 2: REAL-TIME GRAMMAR ANALYSIS ---
     with tab2:
