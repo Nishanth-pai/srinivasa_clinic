@@ -11,21 +11,16 @@ import re
 import time
 
 
-# --- 1. FIREBASE INITIALIZATION ---
+# --- FIREBASE SETUP ---
+# Check if the app is already initialized to prevent double-loading errors
 if not firebase_admin._apps:
-    # Check if we are running on Streamlit Cloud (checking for the secret)
-    if "FIREBASE_KEY" in st.secrets:
-        # Load the secret string and convert it back to a dictionary
-        key_dict = json.loads(st.secrets["FIREBASE_KEY"])
-        cred = credentials.Certificate(key_dict)
-    else:
-        # Running locally on your Mac, use the physical file
-        cred = credentials.Certificate('firebase_key.json')
+    # Convert Streamlit's secure [firebase] block back into a dictionary
+    firebase_credentials = dict(st.secrets["firebase"])
     
-    # Initialize the app with whichever credential method was chosen above
+    # Initialize using the secure dictionary instead of a local file
+    cred = credentials.Certificate(firebase_credentials)
     firebase_admin.initialize_app(cred)
 
-# Connect to the database (this stays OUTSIDE the if statement)
 db = firestore.client()
 
 # --- 2. PAGE FUNCTIONS ---
