@@ -492,8 +492,8 @@ def student_portal():
         st.write("Analyze the structure, meter (Chandas), and clinical meaning of classical verses.")
         
         col1, col2 = st.columns(2)
-        verse_input = col1.text_area("1. Enter Raw Verse (Sloka)", "तत्र पूर्वं ज्वरे कुर्याल् । लङ्घनं जलदोषात् ॥")
-        split_input = col2.text_area("2. Enter Split Version (Padacheda)", "तत्र पूर्वम् ज्वरे कुर्यात् । लङ्घनम् जलदोषात् ॥")
+        verse_input = col1.text_area("1. Enter Raw Verse (Sloka)", "")
+        split_input = col2.text_area("2. Enter Split Version (Padacheda)", "")
         
         if st.button("Analyze Verse") and verse_input:
             st.divider()
