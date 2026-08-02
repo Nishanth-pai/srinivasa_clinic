@@ -457,12 +457,25 @@ def get_prosody_details(pada_text):
     return syllables, pattern, chandas
 
 def render_laghu_guru_html(syllables, pattern):
-    """Generates HTML to stack the Laghu/Guru marks directly over the text."""
+    """Generates HTML to stack the Laghu/Guru marks and group them into Ganas (sets of 3)."""
     html = "<div style='display: flex; flex-wrap: wrap; margin-bottom: 15px;'>"
-    for syl, mark in zip(syllables, pattern):
-        color = "#e74c3c" if mark == 'S' else "#3498db"
-        # We removed the formatting spaces here so Streamlit doesn't think it is a Markdown code block
-        html += f"<div style='display: flex; flex-direction: column; align-items: center; margin-right: 8px; font-family: sans-serif;'><span style='font-size: 16px; font-weight: bold; color: {color};'>{mark}</span><span style='font-size: 22px; color: #2c3e50;'>{syl}</span></div>"
+    
+    # Iterate through syllables in chunks of 3 (Ganas)
+    for i in range(0, len(syllables), 3):
+        chunk_syl = syllables[i:i+3]
+        chunk_pat = pattern[i:i+3]
+        
+        # Create a visually distinct box for each Gana
+        html += "<div style='display: flex; border: 2px solid #bdc3c7; border-radius: 8px; padding: 5px; margin-right: 12px; margin-bottom: 10px; background-color: #f9fbfd;'>"
+        
+        # Render the syllables inside the box
+        for syl, mark in zip(chunk_syl, chunk_pat):
+            color = "#e74c3c" if mark == 'S' else "#3498db"
+            html += f"<div style='display: flex; flex-direction: column; align-items: center; padding: 0 8px; font-family: sans-serif;'><span style='font-size: 16px; font-weight: bold; color: {color};'>{mark}</span><span style='font-size: 22px; color: #2c3e50;'>{syl}</span></div>"
+        
+        # Close the Gana box
+        html += "</div>"
+        
     html += "</div>"
     return html
 
