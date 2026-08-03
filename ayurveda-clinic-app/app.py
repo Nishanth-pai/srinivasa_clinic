@@ -627,16 +627,14 @@ def fetch_native_dictionary(word):
 
 def student_portal():
     st.title("📚 Student Learning Corner")
-    # ... (the rest of your student portal code continues below) ...
-
-def student_portal():
-    st.title("📚 Student Learning Corner")
     st.write("Welcome to the academic portal. Explore classical text analyses, grammar breakdowns, and clinical inventions.")
     
-    # Added a third tab for the Grammar Sandbox
+    # Define the three tabs
     tab1, tab2, tab3 = st.tabs(["Classical Text Analysis", "Real-Time Grammar", "Clinical Inventions"])
     
+    # ==========================================
     # --- TAB 1: VERSE ANALYSIS (PROSODY) ---
+    # ==========================================
     with tab1:
         st.subheader("Verse Breakdown & Prosody")
         st.write("Analyze the structure, meter (Chandas), and clinical meaning of classical verses.")
@@ -668,132 +666,77 @@ def student_portal():
             
             st.markdown("### Clinical Understanding")
             
-            # A mini-dictionary to hold your verse meanings
             known_verses = {
                 "तत्र पूर्वं ज्वरे": "Detailed explanation of the mechanism of Langhana in early stages of Jvara.",
                 "तस्यायुषः पुण्यतमो": "Explanation of the most sacred Veda (Ayurveda) for those seeking longevity.",
-                # You can easily add more verses and meanings here in the future!
             }
             
-            # Check if any of our known verse snippets are inside the text the user pasted
             meaning_found = False
             for snippet, meaning in known_verses.items():
                 if snippet in text_to_process:
                     st.write(meaning)
                     meaning_found = True
-                    break # Stop searching once we find a match
+                    break
             
-            # If the verse isn't in our dictionary, show a default message
             if not meaning_found:
                 st.info("The clinical meaning for this specific verse has not been added to the local database yet.")
 
-    # --- TAB 2: REAL-TIME GRAMMAR ANALYSIS ---
+    # ==========================================
+    # --- TAB 2: REAL-TIME GRAMMAR & DICTIONARY ---
+    # ==========================================
     with tab2:
-        st.subheader("🔍 Real-Time Grammar & Sandhi Sandbox")
+        st.markdown("### 🔍 Real-Time Grammar & Sandhi Sandbox")
         st.write("Type a combined Sanskrit word to instantly analyze its components, roots (Dhatu), and cases (Vibhakti).")
-        # ... previous code ...
-    st.write("Type a combined Sanskrit word to instantly analyze its components, roots (Dhatu), and cases (Vibhakti).")
-
-    # --- PASTE THE CLEANED UP BLOCK HERE ---
-    st.subheader("Integrated Sanskrit Dictionary")
-
-    word_to_analyze = st.text_input("Enter a word to parse (e.g., जलदोषात्, रामस्य, वृक्षे):").strip()
-
-    if word_to_analyze:
-        dictionary_meaning = fetch_native_dictionary(word_to_analyze)
-
-        if dictionary_meaning:
-            st.success("Definition Found:")
-            st.markdown(dictionary_meaning)
+        
+        st.subheader("Integrated Sanskrit Dictionary")
+        word_to_analyze = st.text_input("Enter a word to parse (e.g., जलदोषात्, रामस्य, वृक्षे):").strip()
+        
+        if word_to_analyze:
+            dictionary_meaning = fetch_native_dictionary(word_to_analyze)
             
-            if st.button("Save to My Clinical Dictionary"):
+            if dictionary_meaning:
+                st.success("Definition Found:")
+                st.markdown(dictionary_meaning)
+                
+                # --- FIREBASE SAVE BUTTON ---
+                if st.button("Save to My Clinical Dictionary"):
+                    try:
+                        db.collection("amarakosha").document(word_to_analyze).set({
+                            "word": word_to_analyze,
+                            "definition": dictionary_meaning,
+                            "source": "Sabda-kalpadruma / Monier-Williams"
+                        })
+                        st.toast(f"✨ '{word_to_analyze}' permanently saved to cloud!")
+                    except Exception as e:
+                        st.error("Failed to save to database. Check connection.")
+            else:
+                st.error(f"No definition found for '{word_to_analyze}'.")
+
+        st.markdown("---")
+
+        # --- FIREBASE RETRIEVAL EXPANDER ---
+        with st.expander("View Local Firebase Amarakosha Notes"):
+            if word_to_analyze:
                 try:
-                    db.collection("amarakosha").document(word_to_analyze).set({
-                        "word": word_to_analyze,
-                        "definition": dictionary_meaning,
-                        "source": "Sabda-kalpadruma / Monier-Williams"
-                    })
-                    st.toast(f"✨ '{word_to_analyze}' permanently saved to cloud!")
-                except Exception as e:
-                    st.error("Failed to save to database. Check connection.")
-        else:
-            st.error(f"No definition found for '{word_to_analyze}'.")
-
-    st.markdown("---")
-
-    with st.expander("View Local Firebase Amarakosha Notes"):
-        if word_to_analyze:
-            try:
-                doc_ref = db.collection("amarakosha").document(word_to_analyze)
-                doc = doc_ref.get()
-                
-                if doc.exists:
-                    st.info(f"📚 Cloud Entry for **{word_to_analyze}**:")
-                    saved_data = doc.to_dict()
-                    st.markdown(saved_data.get("definition", "No definition found."))
-                else:
-                    st.write(f"No entry found in local cloud dictionary for root: {word_to_analyze}")
-            except Exception as e:
-                st.write("Could not connect to Firebase to retrieve notes.")
-        else:
-            st.write("Type a word above to see its saved notes.")
-            
-        if word_to_analyze:
-            st.divider()
-            st.markdown(f"### Live Analysis: **{word_to_analyze}**")
-            
-            col_g1, col_g2 = st.columns(2)
-            
-            with col_g1:
-                st.markdown("### ✂️ 1. Padacheda (Word Splitting)")
-                # A basic Sandhi splitting heuristic for common clinical terms
-                if "दोषात्" in word_to_analyze:
-                    base_word = word_to_analyze.replace("दोषात्", "")
-                    st.info(f"**{base_word}** + **दोष** (with Panchami suffix)")
-                elif "स्य" in word_to_analyze and not word_to_analyze.endswith("स्य"):
-                    # Basic split for compound words containing 'sya'
-                    parts = word_to_analyze.split("स्य")
-                    st.info(f"**{parts[0]}** + **{parts[1]}**")
-                else:
-                    st.info(f"**{word_to_analyze}** (Primary Base Form)")
+                    doc_ref = db.collection("amarakosha").document(word_to_analyze)
+                    doc = doc_ref.get()
                     
-                st.markdown("### 🌱 2. Dhatu (Root) & Pratyaya")
-                # Simple lookup for common clinical Dhatus
-                dhatu_dict = {
-                    "ज्वर": "ज्वर् (to be hot / to have fever)",
-                    "कुर्या": "कृ (to do / to make)",
-                    "लङ्घन": "लङ्घ् (to leap / to fast)",
-                    "दोष": "दुष् (to spoil / to be impure)",
-                    "वेद": "विद् (to know)"
-                }
-                
-                dhatu_found = False
-                for key, root in dhatu_dict.items():
-                    if key in word_to_analyze:
-                        st.success(f"**Root identified:** {root}")
-                        dhatu_found = True
-                        break
-                
-                if not dhatu_found:
-                    st.success("Awaiting root identification in local database...") 
-                
-            with col_g2:
-                st.markdown("### 🏷️ 3. Shabdaroopa (Noun Case / Vibhakti)")
-                # Rule-based Vibhakti identification based on suffixes
-                if word_to_analyze.endswith("त्") or word_to_analyze.endswith("त"):
-                    st.warning("**Panchami Vibhakti (Ablative Case)**\n\n*Meaning:* 'From' or 'Because of' (e.g., Because of the Dosha)")
-                elif word_to_analyze.endswith("स्य"):
-                    st.warning("**Shashti Vibhakti (Genitive Case)**\n\n*Meaning:* 'Of' or 'Belonging to' (e.g., Of the Dosha)")
-                elif word_to_analyze.endswith("म्") or word_to_analyze.endswith("ं"):
-                    st.warning("**Dvitiya Vibhakti (Accusative Case)**\n\n*Meaning:* Object of the action (e.g., To the Dosha)")
-                elif word_to_analyze.endswith("े"):
-                    st.warning("**Saptami Vibhakti (Locative Case)**\n\n*Meaning:* 'In', 'On', or 'At' (e.g., In the fever)")
-                elif word_to_analyze.endswith("ेन"):
-                    st.warning("**Tritiya Vibhakti (Instrumental Case)**\n\n*Meaning:* 'By' or 'With' (e.g., With the Dosha)")
-                elif word_to_analyze.endswith("ाय"):
-                    st.warning("**Chaturthi Vibhakti (Dative Case)**\n\n*Meaning:* 'For' (e.g., For the Dosha)")
-                else:
-                    st.warning("**Prathama Vibhakti (Nominative Case) / Unidentified**\n\n*Meaning:* Subject of the sentence")
+                    if doc.exists:
+                        st.info(f"📚 Cloud Entry for **{word_to_analyze}**:")
+                        saved_data = doc.to_dict()
+                        st.markdown(saved_data.get("definition", "No definition found."))
+                    else:
+                        st.write(f"No entry found in local cloud dictionary for root: {word_to_analyze}")
+                except Exception as e:
+                    st.write("Could not connect to Firebase to retrieve notes.")
+            else:
+                st.write("Type a word above to see its saved notes.")
+
+    # ==========================================
+    # --- TAB 3: CLINICAL INVENTIONS ---
+    # ==========================================
+    with tab3:
+        st.write("Future updates for clinical inventions will be placed here.")
                 
 
 
