@@ -752,42 +752,50 @@ def student_portal():
                 else:
                     st.warning("**Prathama Vibhakti (Nominative Case) / Unidentified**\n\n*Meaning:* Subject of the sentence")
                 
-                st.markdown("### 📖 4. Integrated Sanskrit Dictionary")
-                
-                search_term = word_to_analyze.replace("ात्", "").replace("स्य", "").replace("म्", "").replace("े", "").replace("ेन", "").replace("ाय", "")
-                
-                st.info(f"Fetching classical definition for root: **{search_term}**")
-                
-                # Call our new Python scraper instead of opening a link
-                dictionary_result = fetch_native_dictionary(search_term)
-                
-                if dictionary_result:
-                    # Display it cleanly in a nice UI box
-                    st.success("**Definition Found:**")
-                    st.write(dictionary_result)
-                    
-                    # Option to save it to your own database
-                    if st.button("Save to My Clinical Dictionary"):
-                        st.write("*(Ready to push to Firebase Amarakosha database)*")
-                else:
-                    st.error(f"No definition found for '{search_term}'.")
-                    
-                st.markdown("<hr style='margin-top: 15px; margin-bottom: 15px;'>", unsafe_allow_html=True)
-                
-                with st.expander("View Local Firebase Amarakosha Notes"):
-                    try:
-                        amarakosha_ref = db.collection("amarakosha").where("word", "==", search_term).stream()
-                        found_in_db = False
-                        for doc in amarakosha_ref:
-                            data = doc.to_dict()
-                            st.write(f"**Synonyms (Paryaya):** {data.get('synonyms', 'None listed')}")
-                            st.write(f"**Category (Varga):** {data.get('varga', 'Unknown')}")
-                            found_in_db = True
-                            
-                        if not found_in_db:
-                            st.caption(f"No entry found in local cloud dictionary for root: **{search_term}**")
-                    except Exception as e:
-                        st.caption("Database connection ready. Add an 'amarakosha' collection to Firebase to enable local notes.")
+                # Assuming your search input variable is named 'word' or 'search_word'
+# (Change 'word' to whatever your text_input variable is called)
+
+dictionary_meaning = fetch_native_dictionary(word)
+
+if dictionary_meaning:
+    st.success("Definition Found:")
+    st.markdown(dictionary_meaning)
+    
+    # --- FIREBASE SAVE BUTTON ---
+    if st.button("Save to My Clinical Dictionary"):
+        try:
+            # Create (or overwrite) a document in the 'amarakosha' collection
+            # We use the Sanskrit word itself as the unique Document ID
+            db.collection("amarakosha").document(word).set({
+                "word": word,
+                "definition": dictionary_meaning,
+                "source": "Sabda-kalpadruma / Monier-Williams"
+            })
+            st.toast(f"✨ '{word}' permanently saved to cloud!")
+        except Exception as e:
+            st.error("Failed to save to database. Check connection.")
+
+else:
+    st.error(f"No definition found for '{word}'.")
+
+st.markdown("---")
+
+# --- FIREBASE RETRIEVAL EXPANDER ---
+with st.expander("View Local Firebase Amarakosha Notes"):
+    try:
+        # Check if this specific word exists in your cloud database
+        doc_ref = db.collection("amarakosha").document(word)
+        doc = doc_ref.get()
+        
+        if doc.exists:
+            st.info(f"📚 Cloud Entry for **{word}**:")
+            # Retrieve and display the saved definition
+            saved_data = doc.to_dict()
+            st.markdown(saved_data.get("definition", "No definition found."))
+        else:
+            st.write(f"No entry found in local cloud dictionary for root: {word}")
+    except Exception as e:
+        st.write("Could not connect to Firebase to retrieve notes.")
 
     # --- 3. MAIN NAVIGATION ---
 def main():
