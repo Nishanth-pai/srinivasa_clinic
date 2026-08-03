@@ -521,23 +521,39 @@ DB_PATH = os.path.join(BASE_DIR, 'shabdakalpadruma.db')
 def fetch_native_dictionary(word):
     """
     Queries the local SQLite database for the Sanskrit word.
-    Translates Devanagari to SLP1 (Cologne's format) on the fly.
+    Translates search to SLP1, and translates the results back to Devanagari.
     """
     try:
-        # Convert Devanagari input (e.g., गुण) to SLP1 (e.g., guRa)
+        # Convert Devanagari input to SLP1 for the search
         slp1_word = sanscript.transliterate(word, sanscript.DEVANAGARI, sanscript.SLP1)
         
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         
-        # Search for BOTH the exact Devanagari AND the SLP1 encoded word
         cursor.execute("SELECT definition FROM dictionary WHERE word = ? OR word = ?", (word, slp1_word))
         result = cursor.fetchone()
         
         conn.close()
         
         if result:
-            return result[0]
+            raw_text = result[0]
+            
+            # Check if this is an SLP1 entry from the Cologne database
+            if raw_text.startswith("[Sabda-kalpadruma Offline]"):
+                # Split the English tag away from the definition
+                parts = raw_text.split(" - ", 1)
+                if len(parts) > 1:
+                    tag = parts[0]
+                    slp1_definition = parts[1]
+                    
+                    # Translate ONLY the definition back into Devanagari
+                    devanagari_def = sanscript.transliterate(slp1_definition, sanscript.SLP1, sanscript.DEVANAGARI)
+                    
+                    # Glue the English tag and Devanagari definition back together
+                    return f"{tag} - {devanagari_def}"
+            
+            # If it's from your custom dataset, return it as-is
+            return raw_text
         else:
             return None
             
