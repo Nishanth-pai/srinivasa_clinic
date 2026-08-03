@@ -9,6 +9,7 @@ import io
 from datetime import datetime
 import re
 import time
+import os
 import sqlite3
 import streamlit as st
 
@@ -511,13 +512,17 @@ def render_laghu_guru_html(syllables, pattern):
 # ... (your existing get_prosody_details and render_laghu_guru_html functions are here) ...
 
 @st.cache_data(show_spinner=False, ttl=86400)
+# 1. Get the absolute path to the folder where app.py lives
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, 'shabdakalpadruma.db')
+
 def fetch_native_dictionary(word):
     """
     Queries the local SQLite database for the Sanskrit word.
     """
     try:
-        # Connect to the local database file we just built
-        conn = sqlite3.connect('shabdakalpadruma.db')
+        # 2. Connect using the absolute, bulletproof path
+        conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         
         # Search the database for the exact word
