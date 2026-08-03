@@ -4,3 +4,4 @@ requests
 pandas
 openpyxl
 beautifulsoup4
+indic-transliteration
