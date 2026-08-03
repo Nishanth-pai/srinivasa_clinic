@@ -561,27 +561,36 @@ def fetch_native_dictionary(word):
         return f"Database Error: {e}"
     
 
+@st.cache_data(show_spinner=False, ttl=86400)
 def analyze_dhatu_pratyaya(word):
     """
-    Reads the Dhatu and Pratyaya breakdown from the local grammar.json file.
+    Queries the local SQLite database for the Sanskrit grammatical breakdown.
+    Translates search to SLP1 to ensure broad compatibility.
     """
     try:
-        # Build the absolute path to the new JSON file
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        json_path = os.path.join(base_dir, 'grammar.json')
+        slp1_word = sanscript.transliterate(word, sanscript.DEVANAGARI, sanscript.SLP1)
         
-        # Open and read the file
-        with open(json_path, 'r', encoding='utf-8') as file:
-            grammar_db = json.load(file)
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # Search the new 'grammar' table for both Devanagari and SLP1
+        cursor.execute("SELECT dhatu, pratyaya, meaning FROM grammar WHERE word = ? OR word = ?", (word, slp1_word))
+        result = cursor.fetchone()
+        
+        conn.close()
+        
+        if result:
+            # Package the SQLite row back into a dictionary for Streamlit to render
+            return {
+                "dhatu": result[0],
+                "pratyaya": result[1],
+                "meaning": result[2]
+            }
+        else:
+            return None
             
-        # Return the breakdown if the word exists
-        return grammar_db.get(word, None)
-        
-    except FileNotFoundError:
-        st.error("Could not find grammar.json. Make sure it is in the same folder as app.py!")
-        return None
     except Exception as e:
-        st.error(f"Error reading grammar data: {e}")
+        st.error(f"Grammar Engine Error: {e}")
         return None
 
     # PHASE 1: Query Sabda-kalpadruma
