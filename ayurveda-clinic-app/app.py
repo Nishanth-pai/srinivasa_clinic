@@ -564,14 +564,14 @@ def fetch_native_dictionary(word):
 @st.cache_data(show_spinner=False, ttl=86400)
 def analyze_dhatu_pratyaya(word):
     """
-    Hybrid NLP Architecture:
-    1. Checks the local custom SQLite database first.
-    2. If missing, queries a live computational linguistics API for real-time parsing.
+    Hybrid NLP Architecture: 
+    1. Checks local SQLite database first.
+    2. Uses BeautifulSoup to scrape the INRIA Sanskrit Heritage HTML for live parsing.
     """
-    # --- PHASE 1: LOCAL OVERRIDE SEARCH ---
     try:
         slp1_word = sanscript.transliterate(word, sanscript.DEVANAGARI, sanscript.SLP1)
         
+        # --- PHASE 1: LOCAL DB SEARCH ---
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute("SELECT dhatu, pratyaya, meaning FROM grammar WHERE word = ? OR word = ?", (word, slp1_word))
@@ -586,40 +586,44 @@ def analyze_dhatu_pratyaya(word):
             }
             
     except Exception as e:
-        print(f"Local DB Error: {e}")
+        st.error(f"Local DB Error: {e}")
 
-    # --- PHASE 2: LIVE API NLP PARSING ---
-    # If the word is not in your local database, we ask the live server
+    # --- PHASE 2: LIVE HTML SCRAPING ---
     try:
-        # We use a standard public Sanskrit morphological API / Web interface pattern
-        # (This block securely sends the word to an external algorithm)
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        
-        # In a full production build, this points to your preferred NLP API endpoint
-        # For this bridge, we construct a secure external request
-        api_url = f"https://sanskrit.inria.fr/cgi-bin/sktindex?lex=SH&t=VH&q={slp1_word}"
+        headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'}
+        # Pointing to the actual INRIA Morphological Analyzer
+        api_url = f"https://sanskrit.inria.fr/cgi-bin/sktmorph?lex=SH&st=t&us=f&cp=t&t=VH&word={slp1_word}"
         
         response = requests.get(api_url, headers=headers, timeout=5)
         
         if response.status_code == 200:
-            # We use BeautifulSoup to parse the mathematical breakdown from the server
             soup = BeautifulSoup(response.text, 'html.parser')
             
-            # Extracting the algorithmic results (simplified extraction for the bridge)
-            # You can fine-tune these exact tags based on the specific NLP API you lock in
-            live_dhatu = f"{word} (Algorithmic Base)"
-            live_pratyaya = "Live NLP Parsing Active"
-            live_meaning = "Awaiting final API translation mapping"
-            
-            return {
-                "dhatu": f"{live_dhatu} [Live API]",
-                "pratyaya": live_pratyaya,
-                "meaning": live_meaning
-            }
-            
+            # Extracting data from INRIA's HTML structure
+            content = soup.find('body')
+            if content:
+                # Grab all the text, separating HTML blocks with a pipe
+                raw_text = content.get_text(separator=' | ', strip=True)
+                
+                # Clean up the output to remove generic French/English site headers
+                clean_text = raw_text.replace("Sanskrit Heritage Dictionary", "").strip()
+                
+                # Filter out empty results
+                if "No parsing" in clean_text or len(clean_text) < 10:
+                    return {
+                        "dhatu": f"{word} [Unrecognized]",
+                        "pratyaya": "N/A",
+                        "meaning": "Word could not be split by the INRIA engine."
+                    }
+                
+                return {
+                    "dhatu": f"{word} [Scraped from INRIA Tagger]",
+                    "pratyaya": "Computational Tagging via BS4",
+                    "meaning": clean_text[:400] + "..." # Truncated to keep your UI clean
+                }
+                
     except requests.exceptions.RequestException as e:
-        # If the internet is down, it gracefully catches the error without crashing your app
-        st.warning("Live NLP server is currently unreachable. Please check your internet connection.")
+        st.warning("Live NLP server is currently unreachable. Check your internet connection.")
         return None
         
     return None
