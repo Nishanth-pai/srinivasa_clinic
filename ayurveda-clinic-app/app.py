@@ -564,14 +564,15 @@ def fetch_native_dictionary(word):
 @st.cache_data(show_spinner=False, ttl=86400)
 def analyze_dhatu_pratyaya(word):
     """
-    Hybrid NLP Architecture: 
-    1. Checks local SQLite database first.
-    2. Uses BeautifulSoup to scrape the INRIA Sanskrit Heritage HTML for live parsing.
+    100% Offline Hybrid Architecture:
+    1. Checks local SQLite JSON database first.
+    2. Uses local 'sanskrit_parser' to mathematically split compounds if missing.
     """
+    # --- PHASE 1: LOCAL DB SEARCH ---
     try:
+        from indic_transliteration import sanscript
         slp1_word = sanscript.transliterate(word, sanscript.DEVANAGARI, sanscript.SLP1)
         
-        # --- PHASE 1: LOCAL DB SEARCH ---
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute("SELECT dhatu, pratyaya, meaning FROM grammar WHERE word = ? OR word = ?", (word, slp1_word))
@@ -584,49 +585,45 @@ def analyze_dhatu_pratyaya(word):
                 "pratyaya": local_result[1],
                 "meaning": local_result[2]
             }
-            
     except Exception as e:
         st.error(f"Local DB Error: {e}")
 
-    # --- PHASE 2: LIVE HTML SCRAPING ---
+    # --- PHASE 2: LOCAL ALGORITHMIC PARSING ---
     try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'}
-        # Pointing to the actual INRIA Morphological Analyzer
-        api_url = f"https://sanskrit.inria.fr/cgi-bin/sktmorph?lex=SH&st=t&us=f&cp=t&t=VH&word={slp1_word}"
+        # We import the local NLP tools
+        from sanskrit_parser.base.sanskrit_base import SanskritObject, DEVANAGARI
+        from sanskrit_parser.parser.sandhi_analyzer import LexicalSandhiAnalyzer
         
-        response = requests.get(api_url, headers=headers, timeout=5)
+        # Initialize the offline analyzer
+        analyzer = LexicalSandhiAnalyzer()
+        sanskrit_obj = SanskritObject(word, DEVANAGARI)
         
-        if response.status_code == 200:
-            soup = BeautifulSoup(response.text, 'html.parser')
-            
-            # Extracting data from INRIA's HTML structure
-            content = soup.find('body')
-            if content:
-                # Grab all the text, separating HTML blocks with a pipe
-                raw_text = content.get_text(separator=' | ', strip=True)
-                
-                # Clean up the output to remove generic French/English site headers
-                clean_text = raw_text.replace("Sanskrit Heritage Dictionary", "").strip()
-                
-                # Filter out empty results
-                if "No parsing" in clean_text or len(clean_text) < 10:
-                    return {
-                        "dhatu": f"{word} [Unrecognized]",
-                        "pratyaya": "N/A",
-                        "meaning": "Word could not be split by the INRIA engine."
-                    }
-                
+        # Mathematically split the word locally
+        splits = analyzer.getSandhiSplits(sanskrit_obj)
+        
+        if splits:
+            # Grab the most mathematically probable split path
+            split_paths = splits.find_all_paths(1) 
+            if split_paths:
+                split_result = str(split_paths[0])
                 return {
-                    "dhatu": f"{word} [Scraped from INRIA Tagger]",
-                    "pratyaya": "Computational Tagging via BS4",
-                    "meaning": clean_text[:400] + "..." # Truncated to keep your UI clean
+                    "dhatu": f"{word} [Algorithmic Split]",
+                    "pratyaya": "sanskrit_parser output",
+                    "meaning": split_result
                 }
                 
-    except requests.exceptions.RequestException as e:
-        st.warning("Live NLP server is currently unreachable. Check your internet connection.")
-        return None
-        
-    return None
+        return {
+            "dhatu": f"{word} [Unrecognized]",
+            "pratyaya": "N/A",
+            "meaning": "No local breakdown found and algorithm could not split."
+        }
+            
+    except Exception as e:
+        return {
+            "dhatu": "Engine Loading",
+            "pratyaya": "N/A",
+            "meaning": f"The offline parser is still initializing or downloading its base data: {e}"
+        }
 
     # PHASE 1: Query Sabda-kalpadruma
     for variant in search_variations:
