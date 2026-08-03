@@ -12,7 +12,7 @@ import time
 import os
 import sqlite3
 import streamlit as st
-import json
+from indic_transliteration import sanscript
 
 
 # --- FIREBASE SETUP ---
@@ -512,21 +512,26 @@ def render_laghu_guru_html(syllables, pattern):
     return html
 # ... (your existing get_prosody_details and render_laghu_guru_html functions are here) ...
 
-# 1. First, define your variables at the top
+# 1. Define your variables at the top
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, 'shabdakalpadruma.db')
 
-# 2. THEN place the decorator directly on top of the function
+# 2. The upgraded dictionary function
 @st.cache_data(show_spinner=False, ttl=86400)
 def fetch_native_dictionary(word):
     """
     Queries the local SQLite database for the Sanskrit word.
+    Translates Devanagari to SLP1 (Cologne's format) on the fly.
     """
     try:
+        # Convert Devanagari input (e.g., गुण) to SLP1 (e.g., guRa)
+        slp1_word = sanscript.transliterate(word, sanscript.DEVANAGARI, sanscript.SLP1)
+        
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         
-        cursor.execute("SELECT definition FROM dictionary WHERE word = ?", (word,))
+        # Search for BOTH the exact Devanagari AND the SLP1 encoded word
+        cursor.execute("SELECT definition FROM dictionary WHERE word = ? OR word = ?", (word, slp1_word))
         result = cursor.fetchone()
         
         conn.close()
