@@ -589,6 +589,42 @@ def fetch_native_dictionary(word):
             
     return None
 
+def analyze_dhatu_pratyaya(word):
+    """
+    A foundational local database for identifying Sanskrit roots and suffixes.
+    You can continuously add clinical terms to this dictionary!
+    """
+    grammar_db = {
+        "जलदोषात्": {
+            "dhatu": "जल (Water) + दोष (Fault/Imbalance)", 
+            "pratyaya": "-आत् (Panchami / Ablative)", 
+            "meaning": "From the contamination of water"
+        },
+        "रामस्य": {
+            "dhatu": "राम (Rama)", 
+            "pratyaya": "-स्य (Shashthi / Genitive)", 
+            "meaning": "Of Rama / Belonging to Rama"
+        },
+        "वृक्षे": {
+            "dhatu": "वृक्ष (Tree)", 
+            "pratyaya": "-ए (Saptami / Locative)", 
+            "meaning": "In / On the tree"
+        },
+        "ग्रन्थं": {
+            "dhatu": "ग्रन्थ (Treatise / Book)", 
+            "pratyaya": "-अम् (Dvitiya / Accusative)", 
+            "meaning": "The treatise (as an object)"
+        },
+        "इन्द्र": {
+            "dhatu": "इदि (Idi - to rule/command)", 
+            "pratyaya": "रन् (Ran - agent suffix)", 
+            "meaning": "The ruler / Lord"
+        }
+    }
+    
+    # Return the breakdown if the word exists in our database
+    return grammar_db.get(word, None)
+
     # PHASE 1: Query Sabda-kalpadruma
     for variant in search_variations:
         result = fetch_from_api(variant, "SKDScan")
@@ -731,6 +767,33 @@ def student_portal():
                     st.write("Could not connect to Firebase to retrieve notes.")
             else:
                 st.write("Type a word above to see its saved notes.")
+
+    # ==========================================
+        # --- DHATU & PRATYAYA ENGINE UI ---
+        # ==========================================
+        st.markdown("---")
+        st.markdown("### ⚙️ Dhatu & Pratyaya Engine")
+        
+        if word_to_analyze:
+            grammar_result = analyze_dhatu_pratyaya(word_to_analyze)
+            
+            if grammar_result:
+                st.success("Grammar Breakdown Found!")
+                
+                # Create two columns for a clean side-by-side layout
+                col_dhatu, col_pratyaya = st.columns(2)
+                
+                with col_dhatu:
+                    st.info(f"**🌱 Root (Dhatu / Pratipadika):**\n\n{grammar_result['dhatu']}")
+                
+                with col_pratyaya:
+                    st.warning(f"**🧩 Suffix (Pratyaya):**\n\n{grammar_result['pratyaya']}")
+                
+                st.write(f"**Structural Meaning:** {grammar_result['meaning']}")
+            else:
+                st.info(f"Awaiting root identification in local database for: **{word_to_analyze}**")
+        else:
+            st.info("Type a word in the dictionary search box above to see its root and suffix breakdown.")
 
     # ==========================================
     # --- TAB 3: CLINICAL INVENTIONS ---
