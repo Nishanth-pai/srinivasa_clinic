@@ -9,6 +9,8 @@ import io
 from datetime import datetime
 import re
 import time
+import sqlite3
+import streamlit as st
 
 
 # --- FIREBASE SETUP ---
@@ -511,83 +513,28 @@ def render_laghu_guru_html(syllables, pattern):
 @st.cache_data(show_spinner=False, ttl=86400)
 def fetch_native_dictionary(word):
     """
-    Diagnostic dictionary engine.
-    This version removes the cache to force live network requests and 
-    will print the exact server error to your screen if it fails.
+    Queries the local SQLite database for the Sanskrit word.
     """
-    raw_word = word.strip()
-    
-    base_stem = raw_word
-    if raw_word.endswith("ः") or raw_word.endswith("ं"):
-        base_stem = raw_word[:-1]
-    elif raw_word.endswith("म्"):
-        base_stem = raw_word[:-2]
+    try:
+        # Connect to the local database file we just built
+        conn = sqlite3.connect('shabdakalpadruma.db')
+        cursor = conn.cursor()
         
-    classical_base = base_stem.replace("र्त", "र्त्त").replace("र्ति", "र्त्ति").replace("र्य", "र्य्य").replace("र्व", "र्व्व")
-    
-    search_variations = [
-        raw_word, base_stem, f"{base_stem}ः", f"{base_stem}म्", f"{base_stem}ं", 
-        classical_base, f"{classical_base}ः", f"{classical_base}म्", f"{classical_base}ं"
-    ]
-    
-    search_variations = list(dict.fromkeys(search_variations))
-    
-    def fetch_from_api(search_term, dict_code="SKDScan"):
-        url = f"https://www.sanskrit-lexicon.uni-koeln.de/scans/{dict_code}/2020/web/webtc/getword.php?input=deva&output=deva&key={search_term}"
-        try:
-            # We add headers to pretend we are a normal web browser, not a Python bot
-            headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'}
-            response = requests.get(url, headers=headers, timeout=8)
-            
-            # Diagnostic Check: Did the server block us?
-            if response.status_code == 403:
-                return "SERVER_BLOCKED"
-                
-            if response.status_code == 200:
-                soup = BeautifulSoup(response.text, 'html.parser')
-                raw_text = soup.get_text(separator=' ', strip=True)
-                if "not found" in raw_text.lower() or "error" in raw_text.lower():
-                    return None
-                clean_text = re.sub(r"\[\s*ID=\d+\s*\]", "", raw_text)
-                return clean_text.replace("  ", " ").strip()
-                
-            return f"HTTP_ERROR_{response.status_code}"
-            
-        except requests.exceptions.Timeout:
-            return "TIMEOUT"
-        except Exception as e:
-            return f"CODE_ERROR"
-
-    # PHASE 1: Query Sabda-kalpadruma
-    for variant in search_variations:
-        result = fetch_from_api(variant, "SKDScan")
+        # Search the database for the exact word
+        cursor.execute("SELECT definition FROM dictionary WHERE word = ?", (word,))
+        result = cursor.fetchone()
         
-        # Catch explicit errors from the server
-        if result == "SERVER_BLOCKED":
-            return "⚠️ **Connection Blocked:** The Cologne database is currently rejecting requests from Streamlit Cloud due to rate-limiting. Please try again in a few hours."
-        elif result in ["TIMEOUT", "CODE_ERROR"] or str(result).startswith("HTTP_ERROR"):
-            return f"⚠️ **Network Issue:** The server returned an error ({result})."
-            
+        conn.close()
+        
+        # If the word was found, return the definition
         if result:
-            prefix = "" if variant == raw_word else f"*(Found in Sabda-kalpadruma as: **{variant}**)*\n\n"
-            return prefix + result
+            return result[0]
+        else:
+            return None
             
-        time.sleep(0.3)
-            
-    # PHASE 2: Fallback to Monier-Williams
-    for variant in [base_stem, raw_word]:
-        result = fetch_from_api(variant, "MWScan")
-        
-        if result == "SERVER_BLOCKED":
-            return "⚠️ **Connection Blocked:** The Cologne database is currently rejecting requests from Streamlit Cloud."
-            
-        if result:
-            prefix = f"*(Word not in Sabda-kalpadruma. Found in Monier-Williams as: **{variant}**)*\n\n"
-            return prefix + result
-            
-        time.sleep(0.3)
-            
-    return None
+    except Exception as e:
+        return f"Database Error: {e}"
+    
 
 def analyze_dhatu_pratyaya(word):
     """
@@ -643,21 +590,7 @@ def analyze_dhatu_pratyaya(word):
             
     return None
 
-    # 1. First attempt: Search exactly what the user typed
-    result = fetch_from_api(word)
-    
-    if result:
-        return result
-        
-    # 2. Second attempt: Apply classical Paninian doubling rules if the first search fails
-    # E.g., मूर्ति -> मूर्त्ति, कार्य -> कार्य्य, सर्व -> सर्व्व
-    classical_word = word.replace("र्त", "र्त्त").replace("र्ति", "र्त्ति").replace("र्य", "र्य्य").replace("र्व", "र्व्व")
-    
-    if classical_word != word:
-        # Silently try the search again with the classical spelling
-        return fetch_from_api(classical_word)
-        
-    return None
+   
 
 # --- PORTAL FUNCTIONS ---
 
