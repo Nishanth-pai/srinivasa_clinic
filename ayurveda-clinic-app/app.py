@@ -691,10 +691,8 @@ def student_portal():
     with tab2:
         st.subheader("🔍 Real-Time Grammar & Sandhi Sandbox")
         st.write("Type a combined Sanskrit word to instantly analyze its components, roots (Dhatu), and cases (Vibhakti).")
-        
-        # Streamlit automatically updates the page as you type in this box
-        word_to_analyze = st.text_input("Enter a word to parse (e.g., जलदोषात्, रामस्य, वृक्षे):").strip()
-        
+       
+            
         if word_to_analyze:
             st.divider()
             st.markdown(f"### Live Analysis: **{word_to_analyze}**")
@@ -752,34 +750,55 @@ def student_portal():
                 else:
                     st.warning("**Prathama Vibhakti (Nominative Case) / Unidentified**\n\n*Meaning:* Subject of the sentence")
                 
-                # Assuming your search input variable is named 'word' or 'search_word'
-# (Change 'word' to whatever your text_input variable is called)
+st.subheader("Integrated Sanskrit Dictionary")
 
-# Pass the correct variable to your dictionary engine
-dictionary_meaning = fetch_native_dictionary(word_to_analyze)
+# 1. We create the text box FIRST so the variable exists right here
+word_to_analyze = st.text_input("Enter a word to parse (e.g., जलदोषात्, रामस्य, वृक्षे):").strip()
 
-if dictionary_meaning:
-    st.success("Definition Found:")
-    st.markdown(dictionary_meaning)
+# 2. We ONLY run the dictionary engine if the user actually typed something
+if word_to_analyze:
     
-    # --- FIREBASE SAVE BUTTON ---
-    if st.button("Save to My Clinical Dictionary"):
-        try:
-            # Create (or overwrite) a document in the 'amarakosha' collection
-            db.collection("amarakosha").document(word_to_analyze).set({
-                "word": word_to_analyze,
-                "definition": dictionary_meaning,
-                "source": "Sabda-kalpadruma / Monier-Williams"
-            })
-            st.toast(f"✨ '{word_to_analyze}' permanently saved to cloud!")
-        except Exception as e:
-            st.error("Failed to save to database. Check connection.")
+    # 3. NOW we pass the variable to the engine safely
+    dictionary_meaning = fetch_native_dictionary(word_to_analyze)
 
-else:
-    if word_to_analyze: # Only show error if they actually typed something
+    if dictionary_meaning:
+        st.success("Definition Found:")
+        st.markdown(dictionary_meaning)
+        
+        # --- FIREBASE SAVE BUTTON ---
+        if st.button("Save to My Clinical Dictionary"):
+            try:
+                db.collection("amarakosha").document(word_to_analyze).set({
+                    "word": word_to_analyze,
+                    "definition": dictionary_meaning,
+                    "source": "Sabda-kalpadruma / Monier-Williams"
+                })
+                st.toast(f"✨ '{word_to_analyze}' permanently saved to cloud!")
+            except Exception as e:
+                st.error("Failed to save to database. Check connection.")
+
+    else:
         st.error(f"No definition found for '{word_to_analyze}'.")
 
 st.markdown("---")
+
+# --- FIREBASE RETRIEVAL EXPANDER ---
+with st.expander("View Local Firebase Amarakosha Notes"):
+    if word_to_analyze:
+        try:
+            doc_ref = db.collection("amarakosha").document(word_to_analyze)
+            doc = doc_ref.get()
+            
+            if doc.exists:
+                st.info(f"📚 Cloud Entry for **{word_to_analyze}**:")
+                saved_data = doc.to_dict()
+                st.markdown(saved_data.get("definition", "No definition found."))
+            else:
+                st.write(f"No entry found in local cloud dictionary for root: {word_to_analyze}")
+        except Exception as e:
+            st.write("Could not connect to Firebase to retrieve notes.")
+    else:
+        st.write("Type a word above to see its saved notes.")
 
 # --- FIREBASE RETRIEVAL EXPANDER ---
 with st.expander("View Local Firebase Amarakosha Notes"):
