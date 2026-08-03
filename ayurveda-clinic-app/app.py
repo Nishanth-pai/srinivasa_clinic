@@ -12,6 +12,7 @@ import time
 import os
 import sqlite3
 import streamlit as st
+import json
 
 
 # --- FIREBASE SETUP ---
@@ -541,39 +542,26 @@ def fetch_native_dictionary(word):
 
 def analyze_dhatu_pratyaya(word):
     """
-    A foundational local database for identifying Sanskrit roots and suffixes.
-    You can continuously add clinical terms to this dictionary!
+    Reads the Dhatu and Pratyaya breakdown from the local grammar.json file.
     """
-    grammar_db = {
-        "जलदोषात्": {
-            "dhatu": "जल (Water) + दोष (Fault/Imbalance)", 
-            "pratyaya": "-आत् (Panchami / Ablative)", 
-            "meaning": "From the contamination of water"
-        },
-        "रामस्य": {
-            "dhatu": "राम (Rama)", 
-            "pratyaya": "-स्य (Shashthi / Genitive)", 
-            "meaning": "Of Rama / Belonging to Rama"
-        },
-        "वृक्षे": {
-            "dhatu": "वृक्ष (Tree)", 
-            "pratyaya": "-ए (Saptami / Locative)", 
-            "meaning": "In / On the tree"
-        },
-        "ग्रन्थं": {
-            "dhatu": "ग्रन्थ (Treatise / Book)", 
-            "pratyaya": "-अम् (Dvitiya / Accusative)", 
-            "meaning": "The treatise (as an object)"
-        },
-        "इन्द्र": {
-            "dhatu": "इदि (Idi - to rule/command)", 
-            "pratyaya": "रन् (Ran - agent suffix)", 
-            "meaning": "The ruler / Lord"
-        }
-    }
-    
-    # Return the breakdown if the word exists in our database
-    return grammar_db.get(word, None)
+    try:
+        # Build the absolute path to the new JSON file
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        json_path = os.path.join(base_dir, 'grammar.json')
+        
+        # Open and read the file
+        with open(json_path, 'r', encoding='utf-8') as file:
+            grammar_db = json.load(file)
+            
+        # Return the breakdown if the word exists
+        return grammar_db.get(word, None)
+        
+    except FileNotFoundError:
+        st.error("Could not find grammar.json. Make sure it is in the same folder as app.py!")
+        return None
+    except Exception as e:
+        st.error(f"Error reading grammar data: {e}")
+        return None
 
     # PHASE 1: Query Sabda-kalpadruma
     for variant in search_variations:

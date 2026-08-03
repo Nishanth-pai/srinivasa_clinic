@@ -1,0 +1,27 @@
+{
+    "जलदोषात्": {
+        "dhatu": "जल (Water) + दोष (Fault/Imbalance)", 
+        "pratyaya": "-आत् (Panchami / Ablative)", 
+        "meaning": "From the contamination of water"
+    },
+    "रामस्य": {
+        "dhatu": "राम (Rama)", 
+        "pratyaya": "-स्य (Shashthi / Genitive)", 
+        "meaning": "Of Rama / Belonging to Rama"
+    },
+    "वृक्षे": {
+        "dhatu": "वृक्ष (Tree)", 
+        "pratyaya": "-ए (Saptami / Locative)", 
+        "meaning": "In / On the tree"
+    },
+    "ग्रन्थं": {
+        "dhatu": "ग्रन्थ (Treatise / Book)", 
+        "pratyaya": "-अम् (Dvitiya / Accusative)", 
+        "meaning": "The treatise (as an object)"
+    },
+    "गुण": {
+        "dhatu": "गुण् (guṇ - to advise, multiply, or attribute)", 
+        "pratyaya": "घञ् / -अ (Nominal forming suffix)", 
+        "meaning": "Quality, attribute, property, or thread"
+    }
+}
