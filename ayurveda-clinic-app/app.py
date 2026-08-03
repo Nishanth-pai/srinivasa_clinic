@@ -511,27 +511,25 @@ def render_laghu_guru_html(syllables, pattern):
     return html
 # ... (your existing get_prosody_details and render_laghu_guru_html functions are here) ...
 
-@st.cache_data(show_spinner=False, ttl=86400)
-# 1. Get the absolute path to the folder where app.py lives
+# 1. First, define your variables at the top
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, 'shabdakalpadruma.db')
 
+# 2. THEN place the decorator directly on top of the function
+@st.cache_data(show_spinner=False, ttl=86400)
 def fetch_native_dictionary(word):
     """
     Queries the local SQLite database for the Sanskrit word.
     """
     try:
-        # 2. Connect using the absolute, bulletproof path
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         
-        # Search the database for the exact word
         cursor.execute("SELECT definition FROM dictionary WHERE word = ?", (word,))
         result = cursor.fetchone()
         
         conn.close()
         
-        # If the word was found, return the definition
         if result:
             return result[0]
         else:
