@@ -755,7 +755,8 @@ def student_portal():
                 # Assuming your search input variable is named 'word' or 'search_word'
 # (Change 'word' to whatever your text_input variable is called)
 
-dictionary_meaning = fetch_native_dictionary(word)
+# Pass the correct variable to your dictionary engine
+dictionary_meaning = fetch_native_dictionary(word_to_analyze)
 
 if dictionary_meaning:
     st.success("Definition Found:")
@@ -765,20 +766,40 @@ if dictionary_meaning:
     if st.button("Save to My Clinical Dictionary"):
         try:
             # Create (or overwrite) a document in the 'amarakosha' collection
-            # We use the Sanskrit word itself as the unique Document ID
-            db.collection("amarakosha").document(word).set({
-                "word": word,
+            db.collection("amarakosha").document(word_to_analyze).set({
+                "word": word_to_analyze,
                 "definition": dictionary_meaning,
                 "source": "Sabda-kalpadruma / Monier-Williams"
             })
-            st.toast(f"✨ '{word}' permanently saved to cloud!")
+            st.toast(f"✨ '{word_to_analyze}' permanently saved to cloud!")
         except Exception as e:
             st.error("Failed to save to database. Check connection.")
 
 else:
-    st.error(f"No definition found for '{word}'.")
+    if word_to_analyze: # Only show error if they actually typed something
+        st.error(f"No definition found for '{word_to_analyze}'.")
 
 st.markdown("---")
+
+# --- FIREBASE RETRIEVAL EXPANDER ---
+with st.expander("View Local Firebase Amarakosha Notes"):
+    if word_to_analyze:
+        try:
+            # Check if this specific word exists in your cloud database
+            doc_ref = db.collection("amarakosha").document(word_to_analyze)
+            doc = doc_ref.get()
+            
+            if doc.exists:
+                st.info(f"📚 Cloud Entry for **{word_to_analyze}**:")
+                # Retrieve and display the saved definition
+                saved_data = doc.to_dict()
+                st.markdown(saved_data.get("definition", "No definition found."))
+            else:
+                st.write(f"No entry found in local cloud dictionary for root: {word_to_analyze}")
+        except Exception as e:
+            st.write("Could not connect to Firebase to retrieve notes.")
+    else:
+        st.write("Type a word above to see its saved notes.")
 
 # --- FIREBASE RETRIEVAL EXPANDER ---
 with st.expander("View Local Firebase Amarakosha Notes"):
