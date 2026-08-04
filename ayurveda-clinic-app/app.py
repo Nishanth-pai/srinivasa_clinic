@@ -121,35 +121,47 @@ def live_waiting_room_module():
 
 def consultant_portal():
     st.header("Consultant Dashboard")
-    st.subheader("Please Log In")
     
-    # 1. Your existing Firebase login inputs will be here
-    email = st.text_input("Email")
-    password = st.text_input("Password", type="password")
-    login_button = st.button("Login")
-    
-    # 2. Your existing logic that verifies the user
-    if login_button:
-        # Assuming you have a variable or session state that confirms success:
-        login_successful = True # (Replace this with your actual Firebase auth check)
-        
-        if login_successful:
-            # --- THIS IS WHERE STEP 2 GOES ---
-            st.success("Authentication successful. Welcome to the Consultant Dashboard.")
-            
-            # Create internal tabs for the clinic workflow
-            clinic_tab1, clinic_tab2 = st.tabs(["Patient Registration", "Live Waiting Room"])
+    # 1. Initialize the memory bank (Session State) for the login status
+    if "logged_in" not in st.session_state:
+        st.session_state.logged_in = False
 
-            with clinic_tab1:
-                patient_registration_module()
-                
-            with clinic_tab2:
-                # Call the new real-time database reader
-                live_waiting_room_module()
-            # ----------------------------------
+    # 2. Show the login fields ONLY if the user is not logged in
+    if not st.session_state.logged_in:
+        st.subheader("Please Log In")
+        email = st.text_input("Email")
+        password = st.text_input("Password", type="password")
+        login_button = st.button("Login")
+        
+        if login_button:
+            # (If you have active Firebase Auth checking, it goes here)
+            login_successful = True 
             
-        else:
-            st.error("Invalid credentials.")
+            if login_successful:
+                # Save the success state to memory!
+                st.session_state.logged_in = True
+                # Instantly refresh the page to hide the login screen
+                st.rerun() 
+            else:
+                st.error("Invalid credentials.")
+                
+    # 3. Show the Dashboard ONLY if the memory bank says they are logged in
+    if st.session_state.logged_in:
+        st.success("Authentication successful. Welcome to the Consultant Dashboard.")
+        
+        # Optional: Add a logout button to clear the memory
+        if st.button("Logout"):
+            st.session_state.logged_in = False
+            st.rerun()
+            
+        # Create internal tabs for the clinic workflow
+        clinic_tab1, clinic_tab2 = st.tabs(["Patient Registration", "Live Waiting Room"])
+
+        with clinic_tab1:
+            patient_registration_module()
+            
+        with clinic_tab2:
+            live_waiting_room_module()
 
         # Add the third tab for Statistics
    # Add the third tab for Statistics
