@@ -122,11 +122,11 @@ def live_waiting_room_module():
 def consultant_portal():
     st.header("Consultant Dashboard")
     
-    # 1. Initialize the memory bank (Session State) for the login status
+    # 1. Initialize Session State for login
     if "logged_in" not in st.session_state:
         st.session_state.logged_in = False
 
-    # 2. Show the login fields ONLY if the user is not logged in
+    # 2. Login Screen
     if not st.session_state.logged_in:
         st.subheader("Please Log In")
         email = st.text_input("Email")
@@ -134,38 +134,49 @@ def consultant_portal():
         login_button = st.button("Login")
         
         if login_button:
-            # (If you have active Firebase Auth checking, it goes here)
+            # (Your Firebase auth validation goes here)
             login_successful = True 
             
             if login_successful:
-                # Save the success state to memory!
                 st.session_state.logged_in = True
-                # Instantly refresh the page to hide the login screen
                 st.rerun() 
-            else:
-                st.error("Invalid credentials.")
                 
-    # 3. Show the Dashboard ONLY if the memory bank says they are logged in
+    # 3. The Unified Consultant Dashboard
     if st.session_state.logged_in:
-        st.success("Authentication successful. Welcome to the Consultant Dashboard.")
-        
-        # Optional: Add a logout button to clear the memory
-        if st.button("Logout"):
-            st.session_state.logged_in = False
-            st.rerun()
-            
-        # Create internal tabs for the clinic workflow
-        clinic_tab1, clinic_tab2 = st.tabs(["Patient Registration", "Live Waiting Room"])
+        col1, col2 = st.columns([0.85, 0.15])
+        with col1:
+            st.success("Authentication successful. Welcome to the Consultant Dashboard.")
+        with col2:
+            if st.button("Logout"):
+                st.session_state.logged_in = False
+                st.rerun()
+                
+        # --- THE SINGLE, UNIFIED NAVIGATION BAR ---
+        tab1, tab2, tab3, tab4 = st.tabs([
+            "📝 Registration", 
+            "⏳ Live Waiting Room", 
+            "🔍 Search Database", 
+            "📊 Clinic Statistics"
+        ])
 
-        with clinic_tab1:
+        with tab1:
+            # Calls your new registration module
             patient_registration_module()
             
-        with clinic_tab2:
+        with tab2:
+            # Calls your live waiting room module
             live_waiting_room_module()
-
-        # Add the third tab for Statistics
-   # Add the third tab for Statistics
-        tab1, tab2, tab3 = st.tabs(["Add New Patient", "Search Database", "Clinic Statistics"])
+            
+        with tab3:
+            st.header("Search Patients")
+            # --- PASTE YOUR EXISTING SEARCH CODE HERE ---
+            # (The code from your screenshot that creates the selectbox 
+            #  and searches for "Test - 0101010101" belongs right here)
+            
+        with tab4:
+            st.header("Clinic Statistics")
+            # --- PASTE YOUR EXISTING STATISTICS CODE HERE ---
+            st.info("Metrics and charts will render here.")
         
         # --- TAB 1: REGISTRATION FORM ---
         with tab1:
