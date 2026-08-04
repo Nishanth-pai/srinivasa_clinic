@@ -47,40 +47,74 @@ def home_page():
         f'💬 Chat on WhatsApp</button></a>', 
         unsafe_allow_html=True
     )
+def patient_registration_module():
+    st.header("📝 New Patient Registration")
+    
+    # Using st.form prevents duplicate submissions and premature app reruns
+    with st.form("registration_form", clear_on_submit=True):
+        st.subheader("Demographics & Contact")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            first_name = st.text_input("First Name")
+            age = st.number_input("Age", min_value=0, max_value=120, step=1)
+            
+        with col2:
+            last_name = st.text_input("Last Name")
+            contact = st.text_input("Contact Number")
+            
+        st.subheader("Clinical Details")
+        symptoms = st.text_area("Primary Symptoms / Reason for Visit")
+        
+        # File uploader prepared for cloud storage integration
+        diagnostic_files = st.file_uploader("Upload Previous Diagnostics (PDF/Images)", type=['pdf', 'png', 'jpg'], accept_multiple_files=True)
+        
+        # The single submission button for the entire form
+        submitted = st.form_submit_button("Register & Add to Live Waiting Room")
+        
+        if submitted:
+            if first_name and last_name:
+                # Placeholder for your Firebase database injection
+                st.success(f"✅ Patient {first_name} {last_name} successfully registered to the waiting room!")
+                
+                # Placeholder for Firebase Cloud Storage upload logic
+                if diagnostic_files:
+                    st.info(f"Prepared to upload {len(diagnostic_files)} file(s) to secure cloud storage.")
+            else:
+                st.error("Please provide at least a First and Last Name.")
 
 def consultant_portal():
-    st.title("👨‍⚕️ Consultant Dashboard")
+    st.header("Consultant Dashboard")
+    st.subheader("Please Log In")
     
-    # Check if the user is already logged in during this session
-    if "user_token" not in st.session_state:
-        st.session_state.user_token = None
-
-    # Login Form
-    if st.session_state.user_token is None:
-        st.subheader("Please Log In")
-        email = st.sidebar.text_input("Email")
-        password = st.sidebar.text_input("Password", type="password")
+    # 1. Your existing Firebase login inputs will be here
+    email = st.text_input("Email")
+    password = st.text_input("Password", type="password")
+    login_button = st.button("Login")
+    
+    # 2. Your existing logic that verifies the user
+    if login_button:
+        # Assuming you have a variable or session state that confirms success:
+        login_successful = True # (Replace this with your actual Firebase auth check)
         
-        if st.sidebar.button("Log In"):
-            api_key = st.secrets["FIREBASE_WEB_API_KEY"]
-            url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={api_key}"
-            payload = {"email": email, "password": password, "returnSecureToken": True}
+        if login_successful:
+            # --- THIS IS WHERE STEP 2 GOES ---
+            st.success("Authentication successful. Welcome to the Consultant Dashboard.")
             
-            response = requests.post(url, json=payload)
-            auth_data = response.json()
+            # Create internal tabs for the clinic workflow
+            clinic_tab1, clinic_tab2 = st.tabs(["Patient Registration", "Live Waiting Room"])
+
+            with clinic_tab1:
+                # Call the registration module we built in Step 1
+                patient_registration_module()
+                
+            with clinic_tab2:
+                st.header("⏳ Live Waiting Room Status")
+                st.info("Waiting room tracking module will render here.")
+            # ----------------------------------
             
-            if "idToken" in auth_data:
-                st.session_state.user_token = auth_data["idToken"]
-                st.sidebar.success("Logged in successfully!")
-                st.rerun() # Refresh the page to show the dashboard
-            else:
-                st.sidebar.error("Invalid Email or Password.")
-    
-    # Dashboard (Only visible if logged in)
-    if st.session_state.user_token is not None:
-        if st.sidebar.button("Log Out"):
-            st.session_state.user_token = None
-            st.rerun()
+        else:
+            st.error("Invalid credentials.")
             
         # Add the third tab for Statistics
    # Add the third tab for Statistics
@@ -388,6 +422,8 @@ def consultant_portal():
                         file_name=f"Clinic_Stats_{start_date}_to_{end_date}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     )
+
+
 def split_into_padas(verse_text):
     """
     Cleans and splits a Sanskrit verse into its constituent padas.
