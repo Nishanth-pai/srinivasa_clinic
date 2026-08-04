@@ -50,7 +50,6 @@ def home_page():
 def patient_registration_module():
     st.header("📝 New Patient Registration")
     
-    # Using st.form prevents duplicate submissions and premature app reruns
     with st.form("registration_form", clear_on_submit=True):
         st.subheader("Demographics & Contact")
         col1, col2 = st.columns(2)
@@ -66,22 +65,59 @@ def patient_registration_module():
         st.subheader("Clinical Details")
         symptoms = st.text_area("Primary Symptoms / Reason for Visit")
         
-        # File uploader prepared for cloud storage integration
         diagnostic_files = st.file_uploader("Upload Previous Diagnostics (PDF/Images)", type=['pdf', 'png', 'jpg'], accept_multiple_files=True)
         
-        # The single submission button for the entire form
         submitted = st.form_submit_button("Register & Add to Live Waiting Room")
         
         if submitted:
             if first_name and last_name:
-                # Placeholder for your Firebase database injection
+                # Package the data into a dictionary
+                patient_data = {
+                    "first_name": first_name.strip(),
+                    "last_name": last_name.strip(),
+                    "age": age,
+                    "contact": contact.strip(),
+                    "symptoms": symptoms.strip(),
+                    "status": "Waiting", # Default status for the waiting room
+                    "timestamp": firestore.SERVER_TIMESTAMP # Records exact registration time
+                }
+                
+                # Push the dictionary to the Firestore 'patients' collection
+                db.collection("patients").add(patient_data)
+                
                 st.success(f"✅ Patient {first_name} {last_name} successfully registered to the waiting room!")
                 
-                # Placeholder for Firebase Cloud Storage upload logic
                 if diagnostic_files:
                     st.info(f"Prepared to upload {len(diagnostic_files)} file(s) to secure cloud storage.")
             else:
                 st.error("Please provide at least a First and Last Name.")
+
+def live_waiting_room_module():
+    st.header("⏳ Live Waiting Room Status")
+    
+    try:
+        # Query Firestore for all patients with the status 'Waiting', ordered by arrival time
+        patients_ref = db.collection("patients").where("status", "==", "Waiting").order_by("timestamp")
+        docs = patients_ref.stream()
+        
+        patient_list = []
+        for doc in docs:
+            data = doc.to_dict()
+            patient_list.append({
+                "Name": f"{data.get('first_name', '')} {data.get('last_name', '')}",
+                "Age": data.get('age', ''),
+                "Symptoms": data.get('symptoms', ''),
+                "Contact": data.get('contact', '')
+            })
+            
+        # Display the data in a clean, interactive Streamlit dataframe
+        if patient_list:
+            st.dataframe(patient_list, use_container_width=True)
+        else:
+            st.info("The waiting room is currently empty.")
+            
+    except Exception as e:
+        st.error(f"Error fetching waiting room data: {e}")
 
 def consultant_portal():
     st.header("Consultant Dashboard")
@@ -105,17 +141,16 @@ def consultant_portal():
             clinic_tab1, clinic_tab2 = st.tabs(["Patient Registration", "Live Waiting Room"])
 
             with clinic_tab1:
-                # Call the registration module we built in Step 1
                 patient_registration_module()
                 
             with clinic_tab2:
-                st.header("⏳ Live Waiting Room Status")
-                st.info("Waiting room tracking module will render here.")
+                # Call the new real-time database reader
+                live_waiting_room_module()
             # ----------------------------------
             
         else:
             st.error("Invalid credentials.")
-            
+
         # Add the third tab for Statistics
    # Add the third tab for Statistics
         tab1, tab2, tab3 = st.tabs(["Add New Patient", "Search Database", "Clinic Statistics"])
