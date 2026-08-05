@@ -44,51 +44,6 @@ def home_page():
         unsafe_allow_html=True
     )
 
-def patient_registration_module():
-    st.header("📝 Front Desk Registration")
-    
-    with st.form("registration_form", clear_on_submit=True):
-        st.subheader("Demographics & Contact")
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            first_name = st.text_input("First Name")
-            age = st.number_input("Age", min_value=0, max_value=120, step=1)
-            
-        with col2:
-            last_name = st.text_input("Last Name")
-            phone = st.text_input("Contact Number")
-            
-        # Address moved here for the front desk to fill out
-        address = st.text_area("Address")
-            
-        st.subheader("Initial Clinical Info")
-        chief_complaints = st.text_area("Chief Complaint / Reason for Visit")
-            
-        submitted = st.form_submit_button("Register & Send to Waiting Room")
-        
-        if submitted:
-            if first_name and last_name:
-                name = f"{first_name.strip()} {last_name.strip()}"
-                today_date = datetime.now().strftime("%Y-%m-%d")
-                
-                patient_data = {
-                    "name": name,
-                    "age": age,
-                    "phone": phone.strip(),
-                    "address": address.strip(), # Saves address to database
-                    "chief_complaints": chief_complaints.strip(),
-                    "registration_date": today_date,
-                    "status": "Waiting", 
-                    "timestamp": firestore.SERVER_TIMESTAMP,
-                    "visits": [] 
-                }
-                
-                db.collection("patients").add(patient_data)
-                st.success(f"✅ Patient {name} is now in the waiting room!")
-            else:
-                st.error("Please provide at least a First and Last Name.")
-
 def live_waiting_room_module():
     st.header("⏳ Live Waiting Room Queue")
     
@@ -106,7 +61,7 @@ def live_waiting_room_module():
             name = data.get('name', 'Unknown')
             age = data.get('age', 'N/A')
             phone = data.get('phone', 'N/A')
-            initial_address = data.get('address', '') # Pulls address from front desk
+            initial_address = data.get('address', '') 
             initial_complaint = data.get('chief_complaints', '') 
             
             with st.expander(f"🩺 Patient: {name} (Age: {age} | Contact: {phone})"):
@@ -114,7 +69,7 @@ def live_waiting_room_module():
                     
                     st.subheader("Patient Details & Vitals")
                     
-                    # Pre-fills the box, but allows you to edit it if needed
+                    # Visible and pre-filled in the Consultant Dashboard
                     address = st.text_area("Address", value=initial_address)
                     
                     v1, v2, v3, v4 = st.columns(4)
@@ -136,7 +91,12 @@ def live_waiting_room_module():
                     
                     diagnostic_files = st.file_uploader("Upload Diagnostics (PDF/Images)", type=['pdf', 'png', 'jpg'], accept_multiple_files=True)
                     
-                    complete_consultation = st.form_submit_button("Save Full Profile & Complete Consultation")
+                    # Two separate buttons for complete control
+                    col_btn1, col_btn2 = st.columns(2)
+                    with col_btn1:
+                        complete_consultation = st.form_submit_button("Save Full Profile & Complete Consultation", type="primary")
+                    with col_btn2:
+                        delete_patient = st.form_submit_button("❌ Delete Patient from Queue")
                     
                     if complete_consultation:
                         db.collection("patients").document(doc_id).update({
@@ -150,7 +110,12 @@ def live_waiting_room_module():
                             "prescription": prescription,
                             "status": "Completed"
                         })
-                        st.success("Consultation saved! Refreshing queue...")
+                        st.success("Consultation saved to database! Refreshing queue...")
+                        st.rerun()
+                        
+                    if delete_patient:
+                        db.collection("patients").document(doc_id).delete()
+                        st.warning(f"Patient {name} has been removed from the database.")
                         st.rerun()
                         
         if waiting_count == 0:
@@ -204,7 +169,7 @@ def consultant_portal():
         with tab3:
             st.subheader("Search Patients")
             
-            docs = db.collection("patients").stream()
+            docs = db.collection("patients").where("status", "==", "Completed").stream()
             patient_dict = {}
             options = [""]
             
