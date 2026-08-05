@@ -180,7 +180,6 @@ def live_waiting_room_module():
                         st.subheader("Follow-up Notes")
                         chief_complaints = st.text_area("Today's Complaints", value=data.get('temp_complaint', '')) 
                         
-                        # Fix: Blank by default, only records what is typed for THIS visit
                         diagnosis_input = st.text_input("Diagnosis for today's visit (Leave blank if N/A)")
                         prescription = st.text_area("Prescription for today")
                         
@@ -191,10 +190,12 @@ def live_waiting_room_module():
                             delete_patient = st.form_submit_button("❌ Remove from Queue")
                             
                         if complete_consultation:
+                            final_diagnosis = diagnosis_input.strip() if diagnosis_input.strip() else data.get('diagnosis', '')
+                            
                             new_visit = {
                                 "date": datetime.now().strftime("%Y-%m-%d"),
                                 "complaints": chief_complaints,
-                                "diagnosis": diagnosis_input.strip(), 
+                                "diagnosis": final_diagnosis, 
                                 "prescription": prescription,
                                 "bp": bp, "weight": weight, "temp": temp, "pulse": pulse
                             }
@@ -208,7 +209,10 @@ def live_waiting_room_module():
                                 "temp_complaint": firestore.DELETE_FIELD
                             }
                             
-                            # Only update the top-level "Latest Diagnosis" if a new one was provided
+                            # Backward-compatibility fix: Lock in the first visit diagnosis for old patients
+                            if 'first_visit_diagnosis' not in data:
+                                update_payload['first_visit_diagnosis'] = data.get('diagnosis', '')
+                            
                             if diagnosis_input.strip():
                                 update_payload["diagnosis"] = diagnosis_input.strip()
                             
@@ -261,7 +265,7 @@ def live_waiting_room_module():
                                 "examinations": examinations,
                                 "investigations": investigations,
                                 "diagnosis": diagnosis.strip(),
-                                "first_visit_diagnosis": diagnosis.strip(), # Fix: Locks in the original diagnosis permanently
+                                "first_visit_diagnosis": diagnosis.strip(), 
                                 "prescription": prescription,
                                 "status": "Completed",
                                 "waiting_for": firestore.DELETE_FIELD
@@ -366,7 +370,6 @@ def consultant_portal():
                     st.divider()
                     st.markdown("### 🗓️ Visit History")
                     
-                    # Fix: Safely pulls the locked first_visit_diagnosis so it never changes retroactively
                     first_diag = data.get('first_visit_diagnosis', data.get('diagnosis', 'Not specified'))
                     
                     with st.expander(f"First Visit - {first_diag}"):
@@ -439,10 +442,12 @@ def consultant_portal():
                         new_prescription = st.text_area("Prescription for today")
                         
                         if st.form_submit_button("Save Manual Follow-up"):
+                            final_new_diagnosis = new_diagnosis_input.strip() if new_diagnosis_input.strip() else latest_diagnosis
+                            
                             new_visit = {
                                 "date": today_date,
                                 "complaints": new_complaints,
-                                "diagnosis": new_diagnosis_input.strip(),
+                                "diagnosis": final_new_diagnosis,
                                 "prescription": new_prescription,
                                 "bp": new_bp,
                                 "weight": new_weight,
@@ -452,6 +457,11 @@ def consultant_portal():
                             updated_visits = visits + [new_visit]
                             
                             update_payload = {"visits": updated_visits}
+                            
+                            # Backward-compatibility fix: Lock in the first visit diagnosis for old patients
+                            if 'first_visit_diagnosis' not in data:
+                                update_payload['first_visit_diagnosis'] = data.get('diagnosis', '')
+                                
                             if new_diagnosis_input.strip():
                                 update_payload["diagnosis"] = new_diagnosis_input.strip()
                                 
