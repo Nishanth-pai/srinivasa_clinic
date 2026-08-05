@@ -11,6 +11,8 @@ import re
 import time
 import os
 import sqlite3
+import base64
+from PIL import Image
 from indic_transliteration import sanscript
 
 # Streamlit requires page config to be the very first command
@@ -47,7 +49,6 @@ def home_page():
 def patient_registration_module():
     st.header("📝 Front Desk Registration")
     
-    # NEW: Tabs for New vs Returning Patients
     tab_new, tab_return = st.tabs(["🆕 New Patient Registration", "🔄 Returning Patient (Follow-up)"])
     
     with tab_new:
@@ -62,6 +63,10 @@ def patient_registration_module():
                 phone = st.text_input("Contact Number")
                 
             address = st.text_area("Address")
+            
+            st.subheader("Patient Photo")
+            profile_pic = st.file_uploader("Upload Patient Photo (Optional)", type=['jpg', 'jpeg', 'png'])
+            
             st.subheader("Initial Clinical Info")
             chief_complaints = st.text_area("Chief Complaint / Reason for Visit")
                 
@@ -72,15 +77,30 @@ def patient_registration_module():
                     name = f"{first_name.strip()} {last_name.strip()}"
                     today_date = datetime.now().strftime("%Y-%m-%d")
                     
+                    # Process and compress the image for database storage
+                    profile_pic_base64 = ""
+                    if profile_pic:
+                        try:
+                            image = Image.open(profile_pic)
+                            if image.mode != 'RGB':
+                                image = image.convert('RGB')
+                            image.thumbnail((250, 250)) # Compress to thumbnail
+                            buffered = io.BytesIO()
+                            image.save(buffered, format="JPEG", quality=80)
+                            profile_pic_base64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
+                        except Exception as e:
+                            st.warning(f"Could not process image: {e}")
+                    
                     patient_data = {
                         "name": name,
                         "age": age,
                         "phone": phone.strip(),
                         "address": address.strip(), 
+                        "profile_pic": profile_pic_base64,
                         "chief_complaints": chief_complaints.strip(),
                         "registration_date": today_date,
                         "status": "Waiting", 
-                        "waiting_for": "First Visit", # Tags them as a brand new patient
+                        "waiting_for": "First Visit", 
                         "timestamp": firestore.SERVER_TIMESTAMP,
                         "visits": [] 
                     }
@@ -92,7 +112,6 @@ def patient_registration_module():
     with tab_return:
         st.subheader("Search & Queue Returning Patient")
         
-        # Pull only completed patients for the front desk to re-queue
         docs = db.collection("patients").where("status", "==", "Completed").stream()
         patient_dict = {}
         options = [""]
@@ -111,10 +130,9 @@ def patient_registration_module():
             if queue_btn:
                 if selected_patient != "":
                     doc_id = patient_dict[selected_patient]["id"]
-                    # Update their status to push them back into the waiting room
                     db.collection("patients").document(doc_id).update({
                         "status": "Waiting",
-                        "waiting_for": "Follow-up", # Tags them as a returning patient
+                        "waiting_for": "Follow-up", 
                         "temp_complaint": today_complaint.strip(),
                         "timestamp": firestore.SERVER_TIMESTAMP
                     })
@@ -139,15 +157,17 @@ def live_waiting_room_module():
             age = data.get('age', 'N/A')
             phone = data.get('phone', 'N/A')
             
-            # Determine if this is a first visit or a follow-up
             waiting_for = data.get('waiting_for', 'First Visit')
             is_followup = (waiting_for == "Follow-up")
             
-            # Change the expander title based on visit type
             expander_title = f"🔄 FOLLOW-UP: {name} (Age: {age})" if is_followup else f"🩺 NEW PATIENT: {name} (Age: {age})"
             
             with st.expander(expander_title):
                 with st.form(key=f"clinical_form_{doc_id}"):
+                    
+                    # Display patient photo if available
+                    if data.get('profile_pic'):
+                        st.image(base64.b64decode(data.get('profile_pic')), width=150)
                     
                     if is_followup:
                         st.info(f"**Previous Diagnosis:** {data.get('diagnosis', 'None recorded')}")
@@ -161,7 +181,9 @@ def live_waiting_room_module():
                         st.divider()
                         st.subheader("Follow-up Notes")
                         chief_complaints = st.text_area("Today's Complaints", value=data.get('temp_complaint', '')) 
-                        diagnosis = st.text_input("Current Diagnosis", value=data.get('diagnosis', ''))
+                        
+                        # Diagnosis starts blank, defaults to previous if nothing entered
+                        diagnosis_input = st.text_input("Current Diagnosis (Leave blank to keep previous)", placeholder=f"Previous: {data.get('diagnosis', 'None')}")
                         prescription = st.text_area("Prescription for today")
                         
                         col_btn1, col_btn2 = st.columns(2)
@@ -171,21 +193,21 @@ def live_waiting_room_module():
                             delete_patient = st.form_submit_button("❌ Remove from Queue")
                             
                         if complete_consultation:
-                            # Package the follow-up data
+                            final_diagnosis = diagnosis_input if diagnosis_input.strip() else data.get('diagnosis', '')
+                            
                             new_visit = {
                                 "date": datetime.now().strftime("%Y-%m-%d"),
                                 "complaints": chief_complaints,
-                                "diagnosis": diagnosis,
+                                "diagnosis": final_diagnosis,
                                 "prescription": prescription,
                                 "bp": bp, "weight": weight, "temp": temp, "pulse": pulse
                             }
                             visits = data.get('visits', [])
                             visits.append(new_visit)
                             
-                            # Append to visits and clear the temporary waiting room tags
                             db.collection("patients").document(doc_id).update({
                                 "visits": visits,
-                                "diagnosis": diagnosis, # Updates latest diagnosis
+                                "diagnosis": final_diagnosis, 
                                 "status": "Completed",
                                 "waiting_for": firestore.DELETE_FIELD,
                                 "temp_complaint": firestore.DELETE_FIELD
@@ -194,7 +216,6 @@ def live_waiting_room_module():
                             st.rerun()
                             
                         if delete_patient:
-                            # Instead of deleting a returning patient from the database, just take them out of the queue
                             db.collection("patients").document(doc_id).update({
                                 "status": "Completed",
                                 "waiting_for": firestore.DELETE_FIELD,
@@ -204,7 +225,6 @@ def live_waiting_room_module():
                             st.rerun()
                             
                     else:
-                        # --- FIRST VISIT FORM ---
                         st.subheader("Patient Details & Baseline Vitals")
                         address = st.text_area("Address", value=data.get('address', ''))
                         
@@ -324,18 +344,27 @@ def consultant_portal():
                     visits = data.get('visits', [])
                     latest_diagnosis = data.get('diagnosis', 'Not specified')
                         
-                    col_a, col_b = st.columns(2)
-                    col_a.write(f"**Name:** {data.get('name')}")
-                    col_a.write(f"**Age:** {data.get('age')} | **Phone:** {data.get('phone')}")
-                    col_a.write(f"**Address:** {data.get('address', 'N/A')}")
+                    # Clean 3-column layout to accommodate the profile picture
+                    col_img, col_a, col_b = st.columns([0.2, 0.4, 0.4])
                     
-                    col_b.write(f"**Total Visits:** {len(visits) + 1}")
-                    col_b.write(f"**Latest Diagnosis:** {latest_diagnosis}")
+                    with col_img:
+                        if data.get('profile_pic'):
+                            st.image(base64.b64decode(data.get('profile_pic')), width=120)
+                        else:
+                            st.info("No Photo")
+                            
+                    with col_a:
+                        st.write(f"**Name:** {data.get('name')}")
+                        st.write(f"**Age:** {data.get('age')} | **Phone:** {data.get('phone')}")
+                        st.write(f"**Address:** {data.get('address', 'N/A')}")
+                    
+                    with col_b:
+                        st.write(f"**Total Visits:** {len(visits) + 1}")
+                        st.write(f"**Latest Diagnosis:** {latest_diagnosis}")
                     
                     st.divider()
                     st.markdown("### 🗓️ Visit History")
                     
-                    # Vitals added to First Visit display
                     with st.expander(f"First Visit - {data.get('diagnosis', 'No Diagnosis')}"):
                         st.info(f"**Vitals:** BP: {data.get('bp', 'N/A')} | Weight: {data.get('weight', '0.0')}kg | Temp: {data.get('temp', '0.0')}°F | Pulse: {data.get('pulse', '0')}bpm")
                         st.write(f"**Complaints:** {data.get('chief_complaints')}")
@@ -361,7 +390,6 @@ def consultant_portal():
                         """
                         st.download_button("🖨️ Print First Visit", data=html_first, file_name=f"{str(data.get('name'))}_FirstVisit.html", mime="text/html", key=f"print_orig_{doc_id}")
                     
-                    # Vitals added to Follow-up loop display
                     for idx, visit in enumerate(visits):
                         with st.expander(f"Follow-up: {visit.get('date')} - {visit.get('diagnosis')}"):
                             st.info(f"**Vitals:** BP: {visit.get('bp', 'N/A')} | Weight: {visit.get('weight', '0.0')}kg | Temp: {visit.get('temp', '0.0')}°F | Pulse: {visit.get('pulse', '0')}bpm")
@@ -391,7 +419,6 @@ def consultant_portal():
 
                     st.divider()
                     
-                    # Vitals added to manual Follow-up input form
                     with st.form(f"follow_up_{doc_id}"):
                         st.markdown("### 🔄 Add Follow-up Visit (Manual Entry)")
                         today_date = datetime.now().strftime("%Y-%m-%d")
@@ -404,14 +431,17 @@ def consultant_portal():
                         new_pulse = v4.number_input("Pulse (bpm)", min_value=0, step=1)
                         
                         new_complaints = st.text_area("Complaints / Notes for today")
-                        new_diagnosis = st.text_input("Current Diagnosis", value=latest_diagnosis)
+                        # Diagnosis defaults to empty, automatically preserves old if left blank
+                        new_diagnosis_input = st.text_input("Current Diagnosis (Leave blank to keep previous)", placeholder=f"Previous: {latest_diagnosis}")
                         new_prescription = st.text_area("Prescription for today")
                         
                         if st.form_submit_button("Save Manual Follow-up"):
+                            final_new_diagnosis = new_diagnosis_input if new_diagnosis_input.strip() else latest_diagnosis
+                            
                             new_visit = {
                                 "date": today_date,
                                 "complaints": new_complaints,
-                                "diagnosis": new_diagnosis,
+                                "diagnosis": final_new_diagnosis,
                                 "prescription": new_prescription,
                                 "bp": new_bp,
                                 "weight": new_weight,
@@ -421,7 +451,7 @@ def consultant_portal():
                             updated_visits = visits + [new_visit]
                             db.collection("patients").document(doc_id).update({
                                 "visits": updated_visits,
-                                "diagnosis": new_diagnosis
+                                "diagnosis": final_new_diagnosis
                             })
                             st.success("Manual follow-up saved!")
                             st.rerun()
