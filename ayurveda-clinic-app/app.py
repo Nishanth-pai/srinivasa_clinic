@@ -26,6 +26,24 @@ if not firebase_admin._apps:
 
 db = firestore.client()
 
+# --- HELPER FUNCTION FOR DOCUMENTS ---
+def process_report_image(uploaded_file):
+    """Compresses uploaded reports so they don't exceed Firebase's 1MB limit."""
+    if uploaded_file is None:
+        return None
+    try:
+        image = Image.open(uploaded_file)
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
+        # Compress to a readable size that saves database space
+        image.thumbnail((1000, 1000)) 
+        buffered = io.BytesIO()
+        image.save(buffered, format="JPEG", quality=75)
+        return base64.b64encode(buffered.getvalue()).decode('utf-8')
+    except Exception as e:
+        st.warning(f"Error processing image: {e}")
+        return None
+
 # --- 2. PAGE FUNCTIONS ---
 def home_page():
     st.title("🌿 Ayurveda Clinic & Wellness")
@@ -183,6 +201,15 @@ def live_waiting_room_module():
                         diagnosis_input = st.text_input("Diagnosis for today's visit (Leave blank if N/A)")
                         prescription = st.text_area("Prescription for today")
                         
+                        # NEW: 4 Upload Tabs for Follow-up
+                        st.markdown("---")
+                        st.subheader("Attach Documents & Reports")
+                        rt1, rt2, rt3, rt4 = st.tabs(["Document 1", "Document 2", "Document 3", "Document 4"])
+                        with rt1: r1 = st.file_uploader("Upload Image/Photo", type=['jpg', 'jpeg', 'png'], key=f"fu_1_{doc_id}")
+                        with rt2: r2 = st.file_uploader("Upload Image/Photo", type=['jpg', 'jpeg', 'png'], key=f"fu_2_{doc_id}")
+                        with rt3: r3 = st.file_uploader("Upload Image/Photo", type=['jpg', 'jpeg', 'png'], key=f"fu_3_{doc_id}")
+                        with rt4: r4 = st.file_uploader("Upload Image/Photo", type=['jpg', 'jpeg', 'png'], key=f"fu_4_{doc_id}")
+                        
                         col_btn1, col_btn2 = st.columns(2)
                         with col_btn1:
                             complete_consultation = st.form_submit_button("Save Follow-up & Complete", type="primary")
@@ -190,6 +217,11 @@ def live_waiting_room_module():
                             delete_patient = st.form_submit_button("❌ Remove from Queue")
                             
                         if complete_consultation:
+                            # Process the images
+                            raw_reports = [r1, r2, r3, r4]
+                            processed_reports = [process_report_image(f) for f in raw_reports if f is not None]
+                            processed_reports = [r for r in processed_reports if r is not None]
+                            
                             final_diagnosis = diagnosis_input.strip() if diagnosis_input.strip() else data.get('diagnosis', '')
                             
                             new_visit = {
@@ -197,7 +229,8 @@ def live_waiting_room_module():
                                 "complaints": chief_complaints,
                                 "diagnosis": final_diagnosis, 
                                 "prescription": prescription,
-                                "bp": bp, "weight": weight, "temp": temp, "pulse": pulse
+                                "bp": bp, "weight": weight, "temp": temp, "pulse": pulse,
+                                "reports": processed_reports # Saves attached documents to this specific visit
                             }
                             visits = data.get('visits', [])
                             visits.append(new_visit)
@@ -209,7 +242,6 @@ def live_waiting_room_module():
                                 "temp_complaint": firestore.DELETE_FIELD
                             }
                             
-                            # Backward-compatibility fix: Lock in the first visit diagnosis for old patients
                             if 'first_visit_diagnosis' not in data:
                                 update_payload['first_visit_diagnosis'] = data.get('diagnosis', '')
                             
@@ -248,7 +280,14 @@ def live_waiting_room_module():
                         diagnosis = st.text_input("Diagnosis")
                         prescription = st.text_area("Prescription")
                         
-                        diagnostic_files = st.file_uploader("Upload Diagnostics (PDF/Images)", type=['pdf', 'png', 'jpg'], accept_multiple_files=True)
+                        # NEW: 4 Upload Tabs for First Visit
+                        st.markdown("---")
+                        st.subheader("Attach Documents & Reports")
+                        rt1, rt2, rt3, rt4 = st.tabs(["Document 1", "Document 2", "Document 3", "Document 4"])
+                        with rt1: r1 = st.file_uploader("Upload Image/Photo", type=['jpg', 'jpeg', 'png'], key=f"fv_1_{doc_id}")
+                        with rt2: r2 = st.file_uploader("Upload Image/Photo", type=['jpg', 'jpeg', 'png'], key=f"fv_2_{doc_id}")
+                        with rt3: r3 = st.file_uploader("Upload Image/Photo", type=['jpg', 'jpeg', 'png'], key=f"fv_3_{doc_id}")
+                        with rt4: r4 = st.file_uploader("Upload Image/Photo", type=['jpg', 'jpeg', 'png'], key=f"fv_4_{doc_id}")
                         
                         col_btn1, col_btn2 = st.columns(2)
                         with col_btn1:
@@ -257,6 +296,11 @@ def live_waiting_room_module():
                             delete_patient = st.form_submit_button("❌ Delete New Patient from Database")
                         
                         if complete_consultation:
+                            # Process the images
+                            raw_reports = [r1, r2, r3, r4]
+                            processed_reports = [process_report_image(f) for f in raw_reports if f is not None]
+                            processed_reports = [r for r in processed_reports if r is not None]
+
                             db.collection("patients").document(doc_id).update({
                                 "address": address,
                                 "bp": bp, "weight": weight, "temp": temp, "pulse": pulse,
@@ -267,6 +311,7 @@ def live_waiting_room_module():
                                 "diagnosis": diagnosis.strip(),
                                 "first_visit_diagnosis": diagnosis.strip(), 
                                 "prescription": prescription,
+                                "first_visit_reports": processed_reports, # Saves to baseline history
                                 "status": "Completed",
                                 "waiting_for": firestore.DELETE_FIELD
                             })
@@ -378,6 +423,14 @@ def consultant_portal():
                         st.write(f"**Diagnosis:** {first_diag}")
                         st.write(f"**Prescription:** {data.get('prescription')}")
                         
+                        # NEW: Display First Visit Reports
+                        first_visit_reports = data.get('first_visit_reports', [])
+                        if first_visit_reports:
+                            st.markdown("---")
+                            st.markdown("##### 📄 Attached Documents")
+                            for idx, r_b64 in enumerate(first_visit_reports):
+                                st.image(base64.b64decode(r_b64), caption=f"Document {idx+1}", use_container_width=True)
+                        
                         html_first = f"""
                         <html>
                         <body style="font-family: sans-serif; padding: 40px; max-width: 800px; margin: auto;">
@@ -403,6 +456,14 @@ def consultant_portal():
                             st.write(f"**Complaints:** {visit.get('complaints')}")
                             st.write(f"**Diagnosis:** {visit.get('diagnosis')}")
                             st.write(f"**Prescription:** {visit.get('prescription')}")
+                            
+                            # NEW: Display Follow-up Reports
+                            visit_reports = visit.get('reports', [])
+                            if visit_reports:
+                                st.markdown("---")
+                                st.markdown("##### 📄 Attached Documents")
+                                for r_idx, r_b64 in enumerate(visit_reports):
+                                    st.image(base64.b64decode(r_b64), caption=f"Document {r_idx+1}", use_container_width=True)
                             
                             html_followup = f"""
                             <html>
@@ -441,8 +502,22 @@ def consultant_portal():
                         new_diagnosis_input = st.text_input("Diagnosis for today's visit (Leave blank if N/A)")
                         new_prescription = st.text_area("Prescription for today")
                         
+                        # NEW: Upload tabs for manual entry too
+                        st.markdown("---")
+                        st.subheader("Attach Documents & Reports")
+                        rt1, rt2, rt3, rt4 = st.tabs(["Document 1", "Document 2", "Document 3", "Document 4"])
+                        with rt1: man1 = st.file_uploader("Upload Image/Photo", type=['jpg', 'jpeg', 'png'], key=f"man_1_{doc_id}")
+                        with rt2: man2 = st.file_uploader("Upload Image/Photo", type=['jpg', 'jpeg', 'png'], key=f"man_2_{doc_id}")
+                        with rt3: man3 = st.file_uploader("Upload Image/Photo", type=['jpg', 'jpeg', 'png'], key=f"man_3_{doc_id}")
+                        with rt4: man4 = st.file_uploader("Upload Image/Photo", type=['jpg', 'jpeg', 'png'], key=f"man_4_{doc_id}")
+                        
                         if st.form_submit_button("Save Manual Follow-up"):
                             final_new_diagnosis = new_diagnosis_input.strip() if new_diagnosis_input.strip() else latest_diagnosis
+                            
+                            # Process manual images
+                            raw_man_reports = [man1, man2, man3, man4]
+                            processed_man = [process_report_image(f) for f in raw_man_reports if f is not None]
+                            processed_man = [r for r in processed_man if r is not None]
                             
                             new_visit = {
                                 "date": today_date,
@@ -452,13 +527,12 @@ def consultant_portal():
                                 "bp": new_bp,
                                 "weight": new_weight,
                                 "temp": new_temp,
-                                "pulse": new_pulse
+                                "pulse": new_pulse,
+                                "reports": processed_man
                             }
                             updated_visits = visits + [new_visit]
                             
                             update_payload = {"visits": updated_visits}
-                            
-                            # Backward-compatibility fix: Lock in the first visit diagnosis for old patients
                             if 'first_visit_diagnosis' not in data:
                                 update_payload['first_visit_diagnosis'] = data.get('diagnosis', '')
                                 
