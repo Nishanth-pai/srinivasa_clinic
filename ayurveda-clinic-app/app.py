@@ -44,6 +44,50 @@ def home_page():
         unsafe_allow_html=True
     )
 
+def patient_registration_module():
+    st.header("📝 Front Desk Registration")
+    
+    with st.form("registration_form", clear_on_submit=True):
+        st.subheader("Demographics & Contact")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            first_name = st.text_input("First Name")
+            age = st.number_input("Age", min_value=0, max_value=120, step=1)
+            
+        with col2:
+            last_name = st.text_input("Last Name")
+            phone = st.text_input("Contact Number")
+            
+        address = st.text_area("Address")
+            
+        st.subheader("Initial Clinical Info")
+        chief_complaints = st.text_area("Chief Complaint / Reason for Visit")
+            
+        submitted = st.form_submit_button("Register & Send to Waiting Room")
+        
+        if submitted:
+            if first_name and last_name:
+                name = f"{first_name.strip()} {last_name.strip()}"
+                today_date = datetime.now().strftime("%Y-%m-%d")
+                
+                patient_data = {
+                    "name": name,
+                    "age": age,
+                    "phone": phone.strip(),
+                    "address": address.strip(), 
+                    "chief_complaints": chief_complaints.strip(),
+                    "registration_date": today_date,
+                    "status": "Waiting", 
+                    "timestamp": firestore.SERVER_TIMESTAMP,
+                    "visits": [] 
+                }
+                
+                db.collection("patients").add(patient_data)
+                st.success(f"✅ Patient {name} is now in the waiting room!")
+            else:
+                st.error("Please provide at least a First and Last Name.")
+
 def live_waiting_room_module():
     st.header("⏳ Live Waiting Room Queue")
     
@@ -68,8 +112,6 @@ def live_waiting_room_module():
                 with st.form(key=f"clinical_form_{doc_id}"):
                     
                     st.subheader("Patient Details & Vitals")
-                    
-                    # Visible and pre-filled in the Consultant Dashboard
                     address = st.text_area("Address", value=initial_address)
                     
                     v1, v2, v3, v4 = st.columns(4)
@@ -80,7 +122,6 @@ def live_waiting_room_module():
                     
                     st.divider()
                     st.subheader("Consultation Notes")
-                    
                     chief_complaints = st.text_area("Chief Complaints", value=initial_complaint) 
                     
                     co_morbidities = st.text_area("Co-morbidities")
@@ -91,7 +132,6 @@ def live_waiting_room_module():
                     
                     diagnostic_files = st.file_uploader("Upload Diagnostics (PDF/Images)", type=['pdf', 'png', 'jpg'], accept_multiple_files=True)
                     
-                    # Two separate buttons for complete control
                     col_btn1, col_btn2 = st.columns(2)
                     with col_btn1:
                         complete_consultation = st.form_submit_button("Save Full Profile & Complete Consultation", type="primary")
@@ -124,7 +164,6 @@ def live_waiting_room_module():
     except Exception as e:
         st.error(f"Error fetching waiting room data: {e}")
 
-
 def consultant_portal():
     st.header("Consultant Dashboard")
     
@@ -152,7 +191,6 @@ def consultant_portal():
                 st.session_state.logged_in = False
                 st.rerun()
                 
-        # --- UNIFIED NAVIGATION BAR ---
         tab1, tab2, tab3, tab4 = st.tabs([
             "📝 Registration", 
             "⏳ Live Waiting Room", 
@@ -169,6 +207,7 @@ def consultant_portal():
         with tab3:
             st.subheader("Search Patients")
             
+            # This query now ONLY pulls completed patients, keeping the waiting room isolated!
             docs = db.collection("patients").where("status", "==", "Completed").stream()
             patient_dict = {}
             options = [""]
@@ -198,6 +237,7 @@ def consultant_portal():
                     col_a, col_b = st.columns(2)
                     col_a.write(f"**Name:** {data.get('name')}")
                     col_a.write(f"**Age:** {data.get('age')} | **Phone:** {data.get('phone')}")
+                    col_a.write(f"**Address:** {data.get('address', 'N/A')}")
                     
                     col_b.write(f"**Total Visits:** {len(visits) + 1}")
                     col_b.write(f"**Latest Diagnosis:** {latest_diagnosis}")
@@ -408,10 +448,6 @@ def consultant_portal():
                     )
 
 def split_into_padas(verse_text):
-    """
-    Cleans and splits a Sanskrit verse into its constituent padas.
-    Handles traditional dandas (।, ॥), English pipes (|), and standard line breaks.
-    """
     normalized_text = verse_text.replace("॥", "।").replace("\n", "।").replace("|", "।")
     raw_padas = [p.strip() for p in normalized_text.split("।") if p.strip()]
     structured_padas = {}
@@ -518,7 +554,6 @@ def fetch_native_dictionary(word):
 @st.cache_data(show_spinner=False, ttl=86400)
 def analyze_dhatu_pratyaya(word):
     try:
-        from indic_transliteration import sanscript
         slp1_word = sanscript.transliterate(word, sanscript.DEVANAGARI, sanscript.SLP1)
         
         conn = sqlite3.connect(DB_PATH)
