@@ -59,6 +59,9 @@ def patient_registration_module():
             last_name = st.text_input("Last Name")
             phone = st.text_input("Contact Number")
             
+        # Address moved here for the front desk to fill out
+        address = st.text_area("Address")
+            
         st.subheader("Initial Clinical Info")
         chief_complaints = st.text_area("Chief Complaint / Reason for Visit")
             
@@ -73,7 +76,8 @@ def patient_registration_module():
                     "name": name,
                     "age": age,
                     "phone": phone.strip(),
-                    "chief_complaints": chief_complaints.strip(), # Saves the front desk notes
+                    "address": address.strip(), # Saves address to database
+                    "chief_complaints": chief_complaints.strip(),
                     "registration_date": today_date,
                     "status": "Waiting", 
                     "timestamp": firestore.SERVER_TIMESTAMP,
@@ -102,13 +106,16 @@ def live_waiting_room_module():
             name = data.get('name', 'Unknown')
             age = data.get('age', 'N/A')
             phone = data.get('phone', 'N/A')
-            initial_complaint = data.get('chief_complaints', '') # Pulls the front desk notes
+            initial_address = data.get('address', '') # Pulls address from front desk
+            initial_complaint = data.get('chief_complaints', '') 
             
             with st.expander(f"🩺 Patient: {name} (Age: {age} | Contact: {phone})"):
                 with st.form(key=f"clinical_form_{doc_id}"):
                     
                     st.subheader("Patient Details & Vitals")
-                    address = st.text_area("Address")
+                    
+                    # Pre-fills the box, but allows you to edit it if needed
+                    address = st.text_area("Address", value=initial_address)
                     
                     v1, v2, v3, v4 = st.columns(4)
                     bp = v1.text_input("BP (e.g. 120/80)")
@@ -119,7 +126,6 @@ def live_waiting_room_module():
                     st.divider()
                     st.subheader("Consultation Notes")
                     
-                    # Pre-fills the box, allowing you to edit or append to it
                     chief_complaints = st.text_area("Chief Complaints", value=initial_complaint) 
                     
                     co_morbidities = st.text_area("Co-morbidities")
