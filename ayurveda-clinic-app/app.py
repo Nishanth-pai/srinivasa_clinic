@@ -59,6 +59,9 @@ def patient_registration_module():
             last_name = st.text_input("Last Name")
             phone = st.text_input("Contact Number")
             
+        st.subheader("Initial Clinical Info")
+        chief_complaints = st.text_area("Chief Complaint / Reason for Visit")
+            
         submitted = st.form_submit_button("Register & Send to Waiting Room")
         
         if submitted:
@@ -66,11 +69,11 @@ def patient_registration_module():
                 name = f"{first_name.strip()} {last_name.strip()}"
                 today_date = datetime.now().strftime("%Y-%m-%d")
                 
-                # Formatted to perfectly match your Search Database requirements
                 patient_data = {
                     "name": name,
                     "age": age,
                     "phone": phone.strip(),
+                    "chief_complaints": chief_complaints.strip(), # Saves the front desk notes
                     "registration_date": today_date,
                     "status": "Waiting", 
                     "timestamp": firestore.SERVER_TIMESTAMP,
@@ -99,6 +102,7 @@ def live_waiting_room_module():
             name = data.get('name', 'Unknown')
             age = data.get('age', 'N/A')
             phone = data.get('phone', 'N/A')
+            initial_complaint = data.get('chief_complaints', '') # Pulls the front desk notes
             
             with st.expander(f"🩺 Patient: {name} (Age: {age} | Contact: {phone})"):
                 with st.form(key=f"clinical_form_{doc_id}"):
@@ -114,7 +118,10 @@ def live_waiting_room_module():
                     
                     st.divider()
                     st.subheader("Consultation Notes")
-                    chief_complaints = st.text_area("Chief Complaints")
+                    
+                    # Pre-fills the box, allowing you to edit or append to it
+                    chief_complaints = st.text_area("Chief Complaints", value=initial_complaint) 
+                    
                     co_morbidities = st.text_area("Co-morbidities")
                     examinations = st.text_area("Examinations")
                     investigations = st.text_area("Investigations Notes")
