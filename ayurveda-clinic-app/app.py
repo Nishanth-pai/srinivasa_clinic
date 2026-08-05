@@ -33,7 +33,7 @@ def home_page():
     st.subheader("Book a Consultation")
     st.write("Click the button below to schedule your appointment directly with our front desk.")
     
-    phone_number = "919876543210" # Replace with actual number
+    phone_number = "919876543210" 
     message = "Hello, I would like to enquire about a consultation booking."
     whatsapp_url = f"https://wa.me/{phone_number}?text={message.replace(' ', '%20')}"
     
@@ -47,46 +47,80 @@ def home_page():
 def patient_registration_module():
     st.header("📝 Front Desk Registration")
     
-    with st.form("registration_form", clear_on_submit=True):
-        st.subheader("Demographics & Contact")
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            first_name = st.text_input("First Name")
-            age = st.number_input("Age", min_value=0, max_value=120, step=1)
-            
-        with col2:
-            last_name = st.text_input("Last Name")
-            phone = st.text_input("Contact Number")
-            
-        address = st.text_area("Address")
-            
-        st.subheader("Initial Clinical Info")
-        chief_complaints = st.text_area("Chief Complaint / Reason for Visit")
-            
-        submitted = st.form_submit_button("Register & Send to Waiting Room")
-        
-        if submitted:
-            if first_name and last_name:
-                name = f"{first_name.strip()} {last_name.strip()}"
-                today_date = datetime.now().strftime("%Y-%m-%d")
+    # NEW: Tabs for New vs Returning Patients
+    tab_new, tab_return = st.tabs(["🆕 New Patient Registration", "🔄 Returning Patient (Follow-up)"])
+    
+    with tab_new:
+        with st.form("registration_form", clear_on_submit=True):
+            st.subheader("Demographics & Contact")
+            col1, col2 = st.columns(2)
+            with col1:
+                first_name = st.text_input("First Name")
+                age = st.number_input("Age", min_value=0, max_value=120, step=1)
+            with col2:
+                last_name = st.text_input("Last Name")
+                phone = st.text_input("Contact Number")
                 
-                patient_data = {
-                    "name": name,
-                    "age": age,
-                    "phone": phone.strip(),
-                    "address": address.strip(), 
-                    "chief_complaints": chief_complaints.strip(),
-                    "registration_date": today_date,
-                    "status": "Waiting", 
-                    "timestamp": firestore.SERVER_TIMESTAMP,
-                    "visits": [] 
-                }
+            address = st.text_area("Address")
+            st.subheader("Initial Clinical Info")
+            chief_complaints = st.text_area("Chief Complaint / Reason for Visit")
                 
-                db.collection("patients").add(patient_data)
-                st.success(f"✅ Patient {name} is now in the waiting room!")
-            else:
-                st.error("Please provide at least a First and Last Name.")
+            submitted = st.form_submit_button("Register & Send to Waiting Room")
+            
+            if submitted:
+                if first_name and last_name:
+                    name = f"{first_name.strip()} {last_name.strip()}"
+                    today_date = datetime.now().strftime("%Y-%m-%d")
+                    
+                    patient_data = {
+                        "name": name,
+                        "age": age,
+                        "phone": phone.strip(),
+                        "address": address.strip(), 
+                        "chief_complaints": chief_complaints.strip(),
+                        "registration_date": today_date,
+                        "status": "Waiting", 
+                        "waiting_for": "First Visit", # Tags them as a brand new patient
+                        "timestamp": firestore.SERVER_TIMESTAMP,
+                        "visits": [] 
+                    }
+                    db.collection("patients").add(patient_data)
+                    st.success(f"✅ Patient {name} is now in the waiting room for their first visit!")
+                else:
+                    st.error("Please provide at least a First and Last Name.")
+
+    with tab_return:
+        st.subheader("Search & Queue Returning Patient")
+        
+        # Pull only completed patients for the front desk to re-queue
+        docs = db.collection("patients").where("status", "==", "Completed").stream()
+        patient_dict = {}
+        options = [""]
+        for doc in docs:
+            data = doc.to_dict()
+            label = f"{data.get('name')} - {data.get('phone')}"
+            options.append(label)
+            patient_dict[label] = {"id": doc.id, "data": data}
+            
+        selected_patient = st.selectbox("Select Patient to Queue:", options, key="front_desk_return_search")
+        
+        with st.form("return_reg_form", clear_on_submit=True):
+            today_complaint = st.text_area("Chief Complaint / Reason for Visit Today")
+            queue_btn = st.form_submit_button("Send to Waiting Room for Follow-up")
+            
+            if queue_btn:
+                if selected_patient != "":
+                    doc_id = patient_dict[selected_patient]["id"]
+                    # Update their status to push them back into the waiting room
+                    db.collection("patients").document(doc_id).update({
+                        "status": "Waiting",
+                        "waiting_for": "Follow-up", # Tags them as a returning patient
+                        "temp_complaint": today_complaint.strip(),
+                        "timestamp": firestore.SERVER_TIMESTAMP
+                    })
+                    st.success(f"✅ Patient {selected_patient} is queued for a follow-up!")
+                else:
+                    st.error("Please select a patient from the dropdown.")
 
 def live_waiting_room_module():
     st.header("⏳ Live Waiting Room Queue")
@@ -94,7 +128,6 @@ def live_waiting_room_module():
     try:
         patients_ref = db.collection("patients").where("status", "==", "Waiting").order_by("timestamp")
         docs = patients_ref.stream()
-        
         waiting_count = 0
         
         for doc in docs:
@@ -105,64 +138,126 @@ def live_waiting_room_module():
             name = data.get('name', 'Unknown')
             age = data.get('age', 'N/A')
             phone = data.get('phone', 'N/A')
-            initial_address = data.get('address', '') 
-            initial_complaint = data.get('chief_complaints', '') 
             
-            with st.expander(f"🩺 Patient: {name} (Age: {age} | Contact: {phone})"):
+            # Determine if this is a first visit or a follow-up
+            waiting_for = data.get('waiting_for', 'First Visit')
+            is_followup = (waiting_for == "Follow-up")
+            
+            # Change the expander title based on visit type
+            expander_title = f"🔄 FOLLOW-UP: {name} (Age: {age})" if is_followup else f"🩺 NEW PATIENT: {name} (Age: {age})"
+            
+            with st.expander(expander_title):
                 with st.form(key=f"clinical_form_{doc_id}"):
                     
-                    st.subheader("Patient Details & Vitals")
-                    address = st.text_area("Address", value=initial_address)
-                    
-                    v1, v2, v3, v4 = st.columns(4)
-                    bp = v1.text_input("BP (e.g. 120/80)")
-                    weight = v2.number_input("Weight (kg)", min_value=0.0, step=0.1)
-                    temp = v3.number_input("Temp (°F)", value=98.6, step=0.1)
-                    pulse = v4.number_input("Pulse (bpm)", min_value=0, step=1)
-                    
-                    st.divider()
-                    st.subheader("Consultation Notes")
-                    chief_complaints = st.text_area("Chief Complaints", value=initial_complaint) 
-                    
-                    co_morbidities = st.text_area("Co-morbidities")
-                    examinations = st.text_area("Examinations")
-                    investigations = st.text_area("Investigations Notes")
-                    diagnosis = st.text_input("Diagnosis")
-                    prescription = st.text_area("Prescription")
-                    
-                    diagnostic_files = st.file_uploader("Upload Diagnostics (PDF/Images)", type=['pdf', 'png', 'jpg'], accept_multiple_files=True)
-                    
-                    col_btn1, col_btn2 = st.columns(2)
-                    with col_btn1:
-                        complete_consultation = st.form_submit_button("Save Full Profile & Complete Consultation", type="primary")
-                    with col_btn2:
-                        delete_patient = st.form_submit_button("❌ Delete Patient from Queue")
-                    
-                    if complete_consultation:
-                        db.collection("patients").document(doc_id).update({
-                            "address": address,
-                            "bp": bp, "weight": weight, "temp": temp, "pulse": pulse,
-                            "chief_complaints": chief_complaints,
-                            "co_morbidities": co_morbidities,
-                            "examinations": examinations,
-                            "investigations": investigations,
-                            "diagnosis": diagnosis,
-                            "prescription": prescription,
-                            "status": "Completed"
-                        })
-                        st.success("Consultation saved to database! Refreshing queue...")
-                        st.rerun()
+                    if is_followup:
+                        st.info(f"**Previous Diagnosis:** {data.get('diagnosis', 'None recorded')}")
+                        st.subheader("Today's Vitals")
+                        v1, v2, v3, v4 = st.columns(4)
+                        bp = v1.text_input("BP (e.g. 120/80)")
+                        weight = v2.number_input("Weight (kg)", min_value=0.0, step=0.1)
+                        temp = v3.number_input("Temp (°F)", value=98.6, step=0.1)
+                        pulse = v4.number_input("Pulse (bpm)", min_value=0, step=1)
                         
-                    if delete_patient:
-                        db.collection("patients").document(doc_id).delete()
-                        st.warning(f"Patient {name} has been removed from the database.")
-                        st.rerun()
+                        st.divider()
+                        st.subheader("Follow-up Notes")
+                        chief_complaints = st.text_area("Today's Complaints", value=data.get('temp_complaint', '')) 
+                        diagnosis = st.text_input("Current Diagnosis", value=data.get('diagnosis', ''))
+                        prescription = st.text_area("Prescription for today")
+                        
+                        col_btn1, col_btn2 = st.columns(2)
+                        with col_btn1:
+                            complete_consultation = st.form_submit_button("Save Follow-up & Complete", type="primary")
+                        with col_btn2:
+                            delete_patient = st.form_submit_button("❌ Remove from Queue")
+                            
+                        if complete_consultation:
+                            # Package the follow-up data
+                            new_visit = {
+                                "date": datetime.now().strftime("%Y-%m-%d"),
+                                "complaints": chief_complaints,
+                                "diagnosis": diagnosis,
+                                "prescription": prescription,
+                                "bp": bp, "weight": weight, "temp": temp, "pulse": pulse
+                            }
+                            visits = data.get('visits', [])
+                            visits.append(new_visit)
+                            
+                            # Append to visits and clear the temporary waiting room tags
+                            db.collection("patients").document(doc_id).update({
+                                "visits": visits,
+                                "diagnosis": diagnosis, # Updates latest diagnosis
+                                "status": "Completed",
+                                "waiting_for": firestore.DELETE_FIELD,
+                                "temp_complaint": firestore.DELETE_FIELD
+                            })
+                            st.success("Follow-up saved! Refreshing queue...")
+                            st.rerun()
+                            
+                        if delete_patient:
+                            # Instead of deleting a returning patient from the database, just take them out of the queue
+                            db.collection("patients").document(doc_id).update({
+                                "status": "Completed",
+                                "waiting_for": firestore.DELETE_FIELD,
+                                "temp_complaint": firestore.DELETE_FIELD
+                            })
+                            st.warning(f"Patient {name} removed from queue (History preserved).")
+                            st.rerun()
+                            
+                    else:
+                        # --- FIRST VISIT FORM ---
+                        st.subheader("Patient Details & Baseline Vitals")
+                        address = st.text_area("Address", value=data.get('address', ''))
+                        
+                        v1, v2, v3, v4 = st.columns(4)
+                        bp = v1.text_input("BP (e.g. 120/80)")
+                        weight = v2.number_input("Weight (kg)", min_value=0.0, step=0.1)
+                        temp = v3.number_input("Temp (°F)", value=98.6, step=0.1)
+                        pulse = v4.number_input("Pulse (bpm)", min_value=0, step=1)
+                        
+                        st.divider()
+                        st.subheader("Consultation Notes")
+                        chief_complaints = st.text_area("Chief Complaints", value=data.get('chief_complaints', '')) 
+                        co_morbidities = st.text_area("Co-morbidities")
+                        examinations = st.text_area("Examinations")
+                        investigations = st.text_area("Investigations Notes")
+                        diagnosis = st.text_input("Diagnosis")
+                        prescription = st.text_area("Prescription")
+                        
+                        diagnostic_files = st.file_uploader("Upload Diagnostics (PDF/Images)", type=['pdf', 'png', 'jpg'], accept_multiple_files=True)
+                        
+                        col_btn1, col_btn2 = st.columns(2)
+                        with col_btn1:
+                            complete_consultation = st.form_submit_button("Save Full Profile & Complete Consultation", type="primary")
+                        with col_btn2:
+                            delete_patient = st.form_submit_button("❌ Delete New Patient from Database")
+                        
+                        if complete_consultation:
+                            db.collection("patients").document(doc_id).update({
+                                "address": address,
+                                "bp": bp, "weight": weight, "temp": temp, "pulse": pulse,
+                                "chief_complaints": chief_complaints,
+                                "co_morbidities": co_morbidities,
+                                "examinations": examinations,
+                                "investigations": investigations,
+                                "diagnosis": diagnosis,
+                                "prescription": prescription,
+                                "status": "Completed",
+                                "waiting_for": firestore.DELETE_FIELD
+                            })
+                            st.success("Consultation saved to database! Refreshing queue...")
+                            st.rerun()
+                            
+                        if delete_patient:
+                            db.collection("patients").document(doc_id).delete()
+                            st.warning(f"New patient {name} has been permanently removed.")
+                            st.rerun()
                         
         if waiting_count == 0:
             st.info("The waiting room is currently empty.")
             
     except Exception as e:
         st.error(f"Error fetching waiting room data: {e}")
+
 
 def consultant_portal():
     st.header("Consultant Dashboard")
@@ -207,7 +302,6 @@ def consultant_portal():
         with tab3:
             st.subheader("Search Patients")
             
-            # This query now ONLY pulls completed patients, keeping the waiting room isolated!
             docs = db.collection("patients").where("status", "==", "Completed").stream()
             patient_dict = {}
             options = [""]
@@ -228,11 +322,7 @@ def consultant_portal():
                     
                     st.markdown("### 📋 Patient Summary")
                     visits = data.get('visits', [])
-                    
-                    if visits and visits[-1].get('diagnosis'):
-                        latest_diagnosis = visits[-1]['diagnosis']
-                    else:
-                        latest_diagnosis = data.get('diagnosis', 'Not specified')
+                    latest_diagnosis = data.get('diagnosis', 'Not specified')
                         
                     col_a, col_b = st.columns(2)
                     col_a.write(f"**Name:** {data.get('name')}")
@@ -242,11 +332,12 @@ def consultant_portal():
                     col_b.write(f"**Total Visits:** {len(visits) + 1}")
                     col_b.write(f"**Latest Diagnosis:** {latest_diagnosis}")
                     
-                    st.info(f"**Baseline Vitals:** BP: {data.get('bp', 'N/A')} | Weight: {data.get('weight', '0.0')}kg | Temp: {data.get('temp', '0.0')}°F | Pulse: {data.get('pulse', '0')}bpm")
                     st.divider()
                     st.markdown("### 🗓️ Visit History")
                     
+                    # Vitals added to First Visit display
                     with st.expander(f"First Visit - {data.get('diagnosis', 'No Diagnosis')}"):
+                        st.info(f"**Vitals:** BP: {data.get('bp', 'N/A')} | Weight: {data.get('weight', '0.0')}kg | Temp: {data.get('temp', '0.0')}°F | Pulse: {data.get('pulse', '0')}bpm")
                         st.write(f"**Complaints:** {data.get('chief_complaints')}")
                         st.write(f"**Diagnosis:** {data.get('diagnosis')}")
                         st.write(f"**Prescription:** {data.get('prescription')}")
@@ -270,8 +361,10 @@ def consultant_portal():
                         """
                         st.download_button("🖨️ Print First Visit", data=html_first, file_name=f"{str(data.get('name'))}_FirstVisit.html", mime="text/html", key=f"print_orig_{doc_id}")
                     
+                    # Vitals added to Follow-up loop display
                     for idx, visit in enumerate(visits):
                         with st.expander(f"Follow-up: {visit.get('date')} - {visit.get('diagnosis')}"):
+                            st.info(f"**Vitals:** BP: {visit.get('bp', 'N/A')} | Weight: {visit.get('weight', '0.0')}kg | Temp: {visit.get('temp', '0.0')}°F | Pulse: {visit.get('pulse', '0')}bpm")
                             st.write(f"**Complaints:** {visit.get('complaints')}")
                             st.write(f"**Diagnosis:** {visit.get('diagnosis')}")
                             st.write(f"**Prescription:** {visit.get('prescription')}")
@@ -298,25 +391,39 @@ def consultant_portal():
 
                     st.divider()
                     
+                    # Vitals added to manual Follow-up input form
                     with st.form(f"follow_up_{doc_id}"):
-                        st.markdown("### 🔄 Add Follow-up Visit")
+                        st.markdown("### 🔄 Add Follow-up Visit (Manual Entry)")
                         today_date = datetime.now().strftime("%Y-%m-%d")
                         st.caption(f"Date: {today_date}")
+                        
+                        v1, v2, v3, v4 = st.columns(4)
+                        new_bp = v1.text_input("BP (e.g. 120/80)")
+                        new_weight = v2.number_input("Weight (kg)", min_value=0.0, step=0.1)
+                        new_temp = v3.number_input("Temp (°F)", value=98.6, step=0.1)
+                        new_pulse = v4.number_input("Pulse (bpm)", min_value=0, step=1)
                         
                         new_complaints = st.text_area("Complaints / Notes for today")
                         new_diagnosis = st.text_input("Current Diagnosis", value=latest_diagnosis)
                         new_prescription = st.text_area("Prescription for today")
                         
-                        if st.form_submit_button("Save Follow-up"):
+                        if st.form_submit_button("Save Manual Follow-up"):
                             new_visit = {
                                 "date": today_date,
                                 "complaints": new_complaints,
                                 "diagnosis": new_diagnosis,
-                                "prescription": new_prescription
+                                "prescription": new_prescription,
+                                "bp": new_bp,
+                                "weight": new_weight,
+                                "temp": new_temp,
+                                "pulse": new_pulse
                             }
                             updated_visits = visits + [new_visit]
-                            db.collection("patients").document(doc_id).update({"visits": updated_visits})
-                            st.success("Follow-up saved!")
+                            db.collection("patients").document(doc_id).update({
+                                "visits": updated_visits,
+                                "diagnosis": new_diagnosis
+                            })
+                            st.success("Manual follow-up saved!")
                             st.rerun()
 
         with tab4:
