@@ -77,14 +77,13 @@ def patient_registration_module():
                     name = f"{first_name.strip()} {last_name.strip()}"
                     today_date = datetime.now().strftime("%Y-%m-%d")
                     
-                    # Process and compress the image for database storage
                     profile_pic_base64 = ""
                     if profile_pic:
                         try:
                             image = Image.open(profile_pic)
                             if image.mode != 'RGB':
                                 image = image.convert('RGB')
-                            image.thumbnail((250, 250)) # Compress to thumbnail
+                            image.thumbnail((250, 250)) 
                             buffered = io.BytesIO()
                             image.save(buffered, format="JPEG", quality=80)
                             profile_pic_base64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
@@ -165,7 +164,6 @@ def live_waiting_room_module():
             with st.expander(expander_title):
                 with st.form(key=f"clinical_form_{doc_id}"):
                     
-                    # Display patient photo if available
                     if data.get('profile_pic'):
                         st.image(base64.b64decode(data.get('profile_pic')), width=150)
                     
@@ -182,8 +180,8 @@ def live_waiting_room_module():
                         st.subheader("Follow-up Notes")
                         chief_complaints = st.text_area("Today's Complaints", value=data.get('temp_complaint', '')) 
                         
-                        # Diagnosis starts blank, defaults to previous if nothing entered
-                        diagnosis_input = st.text_input("Current Diagnosis (Leave blank to keep previous)", placeholder=f"Previous: {data.get('diagnosis', 'None')}")
+                        # Fix: Blank by default, only records what is typed for THIS visit
+                        diagnosis_input = st.text_input("Diagnosis for today's visit (Leave blank if N/A)")
                         prescription = st.text_area("Prescription for today")
                         
                         col_btn1, col_btn2 = st.columns(2)
@@ -193,25 +191,28 @@ def live_waiting_room_module():
                             delete_patient = st.form_submit_button("❌ Remove from Queue")
                             
                         if complete_consultation:
-                            final_diagnosis = diagnosis_input if diagnosis_input.strip() else data.get('diagnosis', '')
-                            
                             new_visit = {
                                 "date": datetime.now().strftime("%Y-%m-%d"),
                                 "complaints": chief_complaints,
-                                "diagnosis": final_diagnosis,
+                                "diagnosis": diagnosis_input.strip(), 
                                 "prescription": prescription,
                                 "bp": bp, "weight": weight, "temp": temp, "pulse": pulse
                             }
                             visits = data.get('visits', [])
                             visits.append(new_visit)
                             
-                            db.collection("patients").document(doc_id).update({
+                            update_payload = {
                                 "visits": visits,
-                                "diagnosis": final_diagnosis, 
                                 "status": "Completed",
                                 "waiting_for": firestore.DELETE_FIELD,
                                 "temp_complaint": firestore.DELETE_FIELD
-                            })
+                            }
+                            
+                            # Only update the top-level "Latest Diagnosis" if a new one was provided
+                            if diagnosis_input.strip():
+                                update_payload["diagnosis"] = diagnosis_input.strip()
+                            
+                            db.collection("patients").document(doc_id).update(update_payload)
                             st.success("Follow-up saved! Refreshing queue...")
                             st.rerun()
                             
@@ -259,7 +260,8 @@ def live_waiting_room_module():
                                 "co_morbidities": co_morbidities,
                                 "examinations": examinations,
                                 "investigations": investigations,
-                                "diagnosis": diagnosis,
+                                "diagnosis": diagnosis.strip(),
+                                "first_visit_diagnosis": diagnosis.strip(), # Fix: Locks in the original diagnosis permanently
                                 "prescription": prescription,
                                 "status": "Completed",
                                 "waiting_for": firestore.DELETE_FIELD
@@ -344,7 +346,6 @@ def consultant_portal():
                     visits = data.get('visits', [])
                     latest_diagnosis = data.get('diagnosis', 'Not specified')
                         
-                    # Clean 3-column layout to accommodate the profile picture
                     col_img, col_a, col_b = st.columns([0.2, 0.4, 0.4])
                     
                     with col_img:
@@ -365,10 +366,13 @@ def consultant_portal():
                     st.divider()
                     st.markdown("### 🗓️ Visit History")
                     
-                    with st.expander(f"First Visit - {data.get('diagnosis', 'No Diagnosis')}"):
+                    # Fix: Safely pulls the locked first_visit_diagnosis so it never changes retroactively
+                    first_diag = data.get('first_visit_diagnosis', data.get('diagnosis', 'Not specified'))
+                    
+                    with st.expander(f"First Visit - {first_diag}"):
                         st.info(f"**Vitals:** BP: {data.get('bp', 'N/A')} | Weight: {data.get('weight', '0.0')}kg | Temp: {data.get('temp', '0.0')}°F | Pulse: {data.get('pulse', '0')}bpm")
                         st.write(f"**Complaints:** {data.get('chief_complaints')}")
-                        st.write(f"**Diagnosis:** {data.get('diagnosis')}")
+                        st.write(f"**Diagnosis:** {first_diag}")
                         st.write(f"**Prescription:** {data.get('prescription')}")
                         
                         html_first = f"""
@@ -377,7 +381,7 @@ def consultant_portal():
                             <h1 style="text-align: center; color: #2c3e50;">Srinivasa Clinic</h1>
                             <hr>
                             <p><strong>Patient Name:</strong> {data.get('name')} <span style="float: right;"><strong>Age:</strong> {data.get('age')}</span></p>
-                            <p><strong>Diagnosis:</strong> {data.get('diagnosis')}</p>
+                            <p><strong>Diagnosis:</strong> {first_diag}</p>
                             <p><strong>Complaints:</strong> {data.get('chief_complaints')}</p>
                             <br>
                             <h3>Prescription (Rx):</h3>
@@ -431,17 +435,14 @@ def consultant_portal():
                         new_pulse = v4.number_input("Pulse (bpm)", min_value=0, step=1)
                         
                         new_complaints = st.text_area("Complaints / Notes for today")
-                        # Diagnosis defaults to empty, automatically preserves old if left blank
-                        new_diagnosis_input = st.text_input("Current Diagnosis (Leave blank to keep previous)", placeholder=f"Previous: {latest_diagnosis}")
+                        new_diagnosis_input = st.text_input("Diagnosis for today's visit (Leave blank if N/A)")
                         new_prescription = st.text_area("Prescription for today")
                         
                         if st.form_submit_button("Save Manual Follow-up"):
-                            final_new_diagnosis = new_diagnosis_input if new_diagnosis_input.strip() else latest_diagnosis
-                            
                             new_visit = {
                                 "date": today_date,
                                 "complaints": new_complaints,
-                                "diagnosis": final_new_diagnosis,
+                                "diagnosis": new_diagnosis_input.strip(),
                                 "prescription": new_prescription,
                                 "bp": new_bp,
                                 "weight": new_weight,
@@ -449,10 +450,12 @@ def consultant_portal():
                                 "pulse": new_pulse
                             }
                             updated_visits = visits + [new_visit]
-                            db.collection("patients").document(doc_id).update({
-                                "visits": updated_visits,
-                                "diagnosis": final_new_diagnosis
-                            })
+                            
+                            update_payload = {"visits": updated_visits}
+                            if new_diagnosis_input.strip():
+                                update_payload["diagnosis"] = new_diagnosis_input.strip()
+                                
+                            db.collection("patients").document(doc_id).update(update_payload)
                             st.success("Manual follow-up saved!")
                             st.rerun()
 
