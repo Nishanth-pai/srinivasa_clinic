@@ -48,7 +48,7 @@ def home_page():
         unsafe_allow_html=True
     )
 def patient_registration_module():
-    st.header("📝 New Patient Registration")
+    st.header("📝 Front Desk Registration")
     
     with st.form("registration_form", clear_on_submit=True):
         st.subheader("Demographics & Contact")
@@ -62,38 +62,72 @@ def patient_registration_module():
             last_name = st.text_input("Last Name")
             contact = st.text_input("Contact Number")
             
-        st.subheader("Clinical Details")
-        symptoms = st.text_area("Primary Symptoms / Reason for Visit")
-        
-        diagnostic_files = st.file_uploader("Upload Previous Diagnostics (PDF/Images)", type=['pdf', 'png', 'jpg'], accept_multiple_files=True)
-        
-        submitted = st.form_submit_button("Register & Add to Live Waiting Room")
+        # Notice that the Clinical Details and File Uploader have been completely removed from here!
+            
+        submitted = st.form_submit_button("Register & Send to Waiting Room")
         
         if submitted:
             if first_name and last_name:
-                # Package the data into a dictionary
                 patient_data = {
                     "first_name": first_name.strip(),
                     "last_name": last_name.strip(),
                     "age": age,
                     "contact": contact.strip(),
-                    "symptoms": symptoms.strip(),
-                    "status": "Waiting", # Default status for the waiting room
-                    "timestamp": firestore.SERVER_TIMESTAMP # Records exact registration time
+                    "status": "Waiting", 
+                    "timestamp": firestore.SERVER_TIMESTAMP
                 }
                 
-                # Push the dictionary to the Firestore 'patients' collection
                 db.collection("patients").add(patient_data)
-                
-                st.success(f"✅ Patient {first_name} {last_name} successfully registered to the waiting room!")
-                
-                if diagnostic_files:
-                    st.info(f"Prepared to upload {len(diagnostic_files)} file(s) to secure cloud storage.")
+                st.success(f"✅ Patient {first_name} {last_name} is now in the waiting room!")
             else:
                 st.error("Please provide at least a First and Last Name.")
 
 def live_waiting_room_module():
-    st.header("⏳ Live Waiting Room Status")
+    st.header("⏳ Live Waiting Room Queue")
+    
+    try:
+        # Query Firestore for patients waiting, ordered by arrival
+        patients_ref = db.collection("patients").where("status", "==", "Waiting").order_by("timestamp")
+        docs = patients_ref.stream()
+        
+        waiting_count = 0
+        
+        for doc in docs:
+            waiting_count += 1
+            data = doc.to_dict()
+            doc_id = doc.id # We need the database ID to update this specific patient later
+            
+            name = f"{data.get('first_name', '')} {data.get('last_name', '')}"
+            age = data.get('age', 'N/A')
+            
+            # Create an expandable clinical folder for each patient
+            with st.expander(f"🩺 Patient: {name} (Age: {age})"):
+                # Use a unique form key for each patient based on their database ID
+                with st.form(key=f"clinical_form_{doc_id}"):
+                    st.subheader("Consultation Notes")
+                    symptoms = st.text_area("Primary Symptoms & History")
+                    diagnosis = st.text_input("Initial Diagnosis")
+                    
+                    diagnostic_files = st.file_uploader("Upload Diagnostics (PDF/Images)", type=['pdf', 'png', 'jpg'], accept_multiple_files=True)
+                    
+                    # Submit button changes their status and updates the database
+                    complete_consultation = st.form_submit_button("Save Notes & Complete Consultation")
+                    
+                    if complete_consultation:
+                        # Update the specific patient's document in Firestore
+                        db.collection("patients").document(doc_id).update({
+                            "symptoms": symptoms,
+                            "diagnosis": diagnosis,
+                            "status": "Completed" # This removes them from the waiting room!
+                        })
+                        st.success("Consultation saved! Refreshing queue...")
+                        st.rerun() # Refresh the page to remove them from the queue
+                        
+        if waiting_count == 0:
+            st.info("The waiting room is currently empty.")
+            
+    except Exception as e:
+        st.error(f"Error fetching waiting room data: {e}")
     
     try:
         # Query Firestore for all patients with the status 'Waiting', ordered by arrival time
